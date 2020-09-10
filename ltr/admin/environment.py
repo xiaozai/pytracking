@@ -11,6 +11,7 @@ def create_default_local_file():
         'workspace_dir': empty_str,
         'tensorboard_dir': 'self.workspace_dir + \'/tensorboard/\'',
         'pretrained_networks': 'self.workspace_dir + \'/pretrained_networks/\'',
+        'cdtb_dir' : empty_str,
         'lasot_dir': empty_str,
         'got10k_dir': empty_str,
         'trackingnet_dir': empty_str,
@@ -52,3 +53,6 @@ def env_settings():
 
         create_default_local_file()
         raise RuntimeError('YOU HAVE NOT SETUP YOUR local.py!!!\n Go to "{}" and set all the paths you need. Then try to run again.'.format(env_file))
+
+if __name__ == '__main__':
+    env_settings()
