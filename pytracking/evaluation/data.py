@@ -20,10 +20,11 @@ class BaseDataset:
 
 class Sequence:
     """Class for the sequence in an evaluation."""
-    def __init__(self, name, frames, dataset, ground_truth_rect, ground_truth_seg=None, init_data=None,
+    def __init__(self, name, frames, dataset, ground_truth_rect, depths=None, ground_truth_seg=None, init_data=None,
                  object_class=None, target_visible=None, object_ids=None, multiobj_mode=False):
         self.name = name
         self.frames = frames
+        self.depths = depths
         self.dataset = dataset
         self.ground_truth_rect = ground_truth_rect
         self.ground_truth_seg = ground_truth_seg
@@ -146,6 +147,14 @@ class Sequence:
         return "{self.__class__.__name__} {self.name}, length={len} frames".format(self=self, len=len(self.frames))
 
 
+# class SequenceDepth(Sequence):
+#     '''
+#         Defined by Jinyu, add depths in the Sequence Class
+#     '''
+#     def __init__(self, name, frames, depths, dataset, ground_truth_rect, ground_truth_seg=None, init_data=None,
+#                  object_class=None, target_visible=None, object_ids=None, multiobj_mode=False):
+#         super().__init__(name=name, frames=frames, dataset=dataset, depths=depths, ground_truth_rect=ground_truth_rect, ground_truth_seg=ground_truth_seg, init_data=init_data,
+#                  object_class=object_class, target_visible=target_visible, object_ids=object_ids, multiobj_mode=multiobj_mode)
 
 class SequenceList(list):
     """List of sequences. Supports the addition operator to concatenate sequence lists."""

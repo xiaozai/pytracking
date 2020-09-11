@@ -12,7 +12,7 @@ from pytracking.evaluation import Tracker
 
 
 def run_tracker(tracker_name, tracker_param, run_id=None, dataset_name='otb', sequence=None, debug=0, threads=0,
-                visdom_info=None):
+                visdom_info=None, use_depth=False):
     """Run tracker on sequence or dataset.
     args:
         tracker_name: Name of tracking method.
@@ -34,7 +34,7 @@ def run_tracker(tracker_name, tracker_param, run_id=None, dataset_name='otb', se
 
     trackers = [Tracker(tracker_name, tracker_param, run_id)]
 
-    run_dataset(dataset, trackers, debug, threads, visdom_info=visdom_info)
+    run_dataset(dataset, trackers, debug, threads, visdom_info=visdom_info, use_depth=use_depth)
 
 
 def main():
@@ -42,15 +42,27 @@ def main():
     parser.add_argument('tracker_name', type=str, help='Name of tracking method.')
     parser.add_argument('tracker_param', type=str, help='Name of parameter file.')
     parser.add_argument('--runid', type=int, default=None, help='The run id.')
-    parser.add_argument('--dataset_name', type=str, default='otb', help='Name of dataset (otb, nfs, uav, tpl, vot, tn, gott, gotv, lasot).')
+    parser.add_argument('--dataset_name', type=str, default='otb', help='Name of dataset (cdtb, otb, nfs, uav, tpl, vot, tn, gott, gotv, lasot).')
     parser.add_argument('--sequence', type=str, default=None, help='Sequence number or name.')
     parser.add_argument('--debug', type=int, default=0, help='Debug level.')
     parser.add_argument('--threads', type=int, default=0, help='Number of threads.')
-    parser.add_argument('--use_visdom', type=bool, default=True, help='Flag to enable visdom.')
+    parser.add_argument('--use_depth', type=int, default=0, help='Flag to use the depth channels')
+    parser.add_argument('--use_visdom', type=int, default=1, help='Flag to enable visdom.')
     parser.add_argument('--visdom_server', type=str, default='127.0.0.1', help='Server for visdom.')
     parser.add_argument('--visdom_port', type=int, default=8097, help='Port for visdom.')
 
     args = parser.parse_args()
+
+    # Sometimes the bool args  are not recognized
+    if args.use_depth > 0 :
+        args.use_depth = True
+    else:
+        args.use_depth = False
+
+    if args.use_visdom > 0 :
+        args.use_visdom = True
+    else:
+        args.use_visdom = False
 
     try:
         seq_name = int(args.sequence)
@@ -58,7 +70,7 @@ def main():
         seq_name = args.sequence
 
     run_tracker(args.tracker_name, args.tracker_param, args.runid, args.dataset_name, seq_name, args.debug,
-                args.threads, {'use_visdom': args.use_visdom, 'server': args.visdom_server, 'port': args.visdom_port})
+                args.threads, {'use_visdom': args.use_visdom, 'server': args.visdom_server, 'port': args.visdom_port}, args.use_depth)
 
 
 if __name__ == '__main__':

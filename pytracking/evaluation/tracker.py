@@ -103,7 +103,7 @@ class Tracker:
         tracker.visdom = self.visdom
         return tracker
 
-    def run_sequence(self, seq, visualization=None, debug=None, visdom_info=None, multiobj_mode=None):
+    def run_sequence(self, seq, use_depth=False, visualization=None, debug=None, visdom_info=None, multiobj_mode=None):
         """Run tracker on sequence.
         args:
             seq: Sequence to run the tracker on.
@@ -145,10 +145,10 @@ class Tracker:
         else:
             raise ValueError('Unknown multi object mode {}'.format(multiobj_mode))
 
-        output = self._track_sequence(tracker, seq, init_info)
+        output = self._track_sequence(tracker, seq, init_info, use_depth=use_depth)
         return output
 
-    def _track_sequence(self, tracker, seq, init_info):
+    def _track_sequence(self, tracker, seq, init_info, use_depth=False):
         # Define outputs
         # Each field in output is a list containing tracker prediction for each frame.
 
@@ -177,12 +177,19 @@ class Tracker:
 
         # Initialize
         image = self._read_image(seq.frames[0])
+        if use_depth:
+            depth = self._read_depth(seq.depths[0])
+        else:
+            depth = None
 
         if tracker.params.visualization and self.visdom is None:
             self.visualize(image, init_info.get('init_bbox'))
 
         start_time = time.time()
-        out = tracker.initialize(image, init_info)
+        if use_depth:
+            out = tracker.initialize(image, depth, init_info)
+        else:
+            out = tracker.initialize(image, init_info)
         if out is None:
             out = {}
 
@@ -194,7 +201,13 @@ class Tracker:
 
         _store_outputs(out, init_default)
 
-        for frame_num, frame_path in enumerate(seq.frames[1:], start=1):
+        if use_depth:
+            input_list = zip(seq.frames[1:], seq.depths[1:])
+        else:
+            input_list = zip(seq.frames[1:], [None]*len(seq.frames[1:]))
+
+        # for frame_num, frame_path in enumerate(seq.frames[1:], start=1):
+        for frame_num, (frame_path, depth_path) in enumerate(input_list, start=1):
             while True:
                 if not self.pause_mode:
                     break
@@ -205,13 +218,21 @@ class Tracker:
                     time.sleep(0.1)
 
             image = self._read_image(frame_path)
+            if use_depth:
+                depth = self._read_depth(depth_path)
+            else:
+                depth = None
 
             start_time = time.time()
 
             info = seq.frame_info(frame_num)
             info['previous_output'] = prev_output
 
-            out = tracker.track(image, info)
+            if use_depth:
+                out = tracker.track(image, depth, info)
+            else:
+                out = tracker.track(image, info)
+
             prev_output = OrderedDict(out)
             _store_outputs(out, {'time': time.time() - start_time})
 
@@ -706,5 +727,10 @@ class Tracker:
         im = cv.imread(image_file)
         return cv.cvtColor(im, cv.COLOR_BGR2RGB)
 
-
-
+    def _read_depth(self, depth_file: str, ndims=3):
+        dp = cv.imread(depth_file, -1)
+        if ndims == 3:
+            dp = cv2.normalize(dp, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F)
+            dp = np.uint16(dp)
+            dp = cv.applyColorMap(dp, cv.COLORMAP_JET)
+        return dp

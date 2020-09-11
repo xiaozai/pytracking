@@ -73,7 +73,7 @@ def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
                 imwrite_indexed(os.path.join(segmentation_path, '{}.png'.format(frame_name)), frame_seg)
 
 
-def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None):
+def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None, use_depth=False):
     """Runs a tracker on a sequence."""
 
     def _results_exist():
@@ -94,10 +94,10 @@ def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None)
     print('Tracker: {} {} {} ,  Sequence: {}'.format(tracker.name, tracker.parameter_name, tracker.run_id, seq.name))
 
     if debug:
-        output = tracker.run_sequence(seq, debug=debug, visdom_info=visdom_info)
+        output = tracker.run_sequence(seq, debug=debug, visdom_info=visdom_info, use_depth=use_depth)
     else:
         try:
-            output = tracker.run_sequence(seq, debug=debug, visdom_info=visdom_info)
+            output = tracker.run_sequence(seq, debug=debug, visdom_info=visdom_info, use_depth=use_depth)
         except Exception as e:
             print(e)
             return
@@ -117,7 +117,7 @@ def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None)
         _save_tracker_output(seq, tracker, output)
 
 
-def run_dataset(dataset, trackers, debug=False, threads=0, visdom_info=None):
+def run_dataset(dataset, trackers, debug=False, threads=0, visdom_info=None, use_depth=False):
     """Runs a list of trackers on a dataset.
     args:
         dataset: List of Sequence instances, forming a dataset.
@@ -142,7 +142,7 @@ def run_dataset(dataset, trackers, debug=False, threads=0, visdom_info=None):
     if mode == 'sequential':
         for seq in dataset:
             for tracker_info in trackers:
-                run_sequence(seq, tracker_info, debug=debug, visdom_info=visdom_info)
+                run_sequence(seq, tracker_info, debug=debug, visdom_info=visdom_info, use_depth=use_depth)
     elif mode == 'parallel':
         param_list = [(seq, tracker_info, debug, visdom_info) for seq, tracker_info in product(dataset, trackers)]
         with multiprocessing.Pool(processes=threads) as pool:
