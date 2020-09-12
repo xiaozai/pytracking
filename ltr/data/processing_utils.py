@@ -5,6 +5,7 @@ import random
 import torch.nn.functional as F
 from .bounding_box_utils import rect_to_rel, rel_to_rect
 
+import numpy as np
 
 def sample_target(im, target_bb, search_area_factor, output_sz=None, mask=None):
     """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
@@ -63,6 +64,75 @@ def sample_target(im, target_bb, search_area_factor, output_sz=None, mask=None):
         if mask is None:
             return im_crop_padded, 1.0
         return im_crop_padded, 1.0, mask_crop_padded
+
+def sample_target_depth(im, dp, target_bb, search_area_factor, output_sz=None, mask=None):
+    """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
+
+    args:
+        im - cv image
+        dp - cv image
+        target_bb - target box [x, y, w, h]
+        search_area_factor - Ratio of crop size to target size
+        output_sz - (float) Size to which the extracted crop is resized (always square). If None, no resizing is done.
+
+    returns:
+        cv image - extracted crop
+        float - the factor by which the crop has been resized to make the crop size equal output_size
+    """
+    x, y, w, h = target_bb.tolist()
+
+    # Song : cv will change the dims of depth when h*w*1
+    nDim_depth = len(dp.shape)
+
+    # Crop image
+    crop_sz = math.ceil(math.sqrt(w * h) * search_area_factor)
+
+    if crop_sz < 1:
+        raise Exception('Too small bounding box.')
+
+    x1 = round(x + 0.5 * w - crop_sz * 0.5)
+    x2 = x1 + crop_sz
+
+    y1 = round(y + 0.5 * h - crop_sz * 0.5)
+    y2 = y1 + crop_sz
+
+    x1_pad = max(0, -x1)
+    x2_pad = max(x2 - im.shape[1] + 1, 0)
+
+    y1_pad = max(0, -y1)
+    y2_pad = max(y2 - im.shape[0] + 1, 0)
+
+    # Crop target
+    im_crop = im[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad, :]
+    dp_crop = dp[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad, :] # Song : crop the depth same as the rgb
+    if mask is not None:
+        mask_crop = mask[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad]
+    # Pad
+    im_crop_padded = cv.copyMakeBorder(im_crop, y1_pad, y2_pad, x1_pad, x2_pad, cv.BORDER_REPLICATE)
+    dp_crop_padded = cv.copyMakeBorder(dp_crop, y1_pad, y2_pad, x1_pad, x2_pad, cv.BORDER_REPLICATE)
+    if mask is not None:
+        mask_crop_padded = F.pad(mask_crop, pad=(x1_pad, x2_pad, y1_pad, y2_pad), mode='constant', value=0)
+
+    if output_sz is not None:
+        resize_factor = output_sz / crop_sz
+        im_crop_padded = cv.resize(im_crop_padded, (output_sz, output_sz))
+        dp_crop_padded = cv.resize(dp_crop_padded, (output_sz, output_sz))
+        # Added by Song
+        if len(dp_crop_padded.shape) < nDim_depth:
+            dp_crop_padded = np.expand_dims(dp_crop_padded, -1)
+        if mask is None:
+            return im_crop_padded, dp_crop_padded, resize_factor
+        mask_crop_padded = \
+        F.interpolate(mask_crop_padded[None, None], (output_sz, output_sz), mode='bilinear', align_corners=False)[0, 0]
+        return im_crop_padded, dp_crop_padded, resize_factor, mask_crop_padded
+
+    else:
+        # Added by Song
+        if len(dp_crop_padded.shape) < nDim_depth:
+            dp_crop_padded = np.expand_dims(dp_crop_padded, -1)
+        if mask is None:
+            return im_crop_padded, dp_crop_padded, 1.0
+        return im_crop_padded, dp_crop_padded, 1.0, mask_crop_padded
 
 
 def transform_image_to_crop(box_in: torch.Tensor, box_extract: torch.Tensor, resize_factor: float,
@@ -123,6 +193,42 @@ def jittered_center_crop(frames, box_extract, box_gt, search_area_factor, output
                 for a_gt, a_ex, rf in zip(box_gt, box_extract, resize_factors)]
 
     return frames_crop, box_crop, masks_crop
+
+def jittered_center_crop_depth(frames, depths, box_extract, box_gt, search_area_factor, output_sz, masks=None):
+    """ For each frame in frames, extracts a square crop centered at box_extract, of area search_area_factor^2
+    times box_extract area. The extracted crops are then resized to output_sz. Further, the co-ordinates of the box
+    box_gt are transformed to the image crop co-ordinates
+
+    args:
+        frames - list of frames
+        depths - list of depths
+        box_extract - list of boxes of same length as frames. The crops are extracted using anno_extract
+        box_gt - list of boxes of same length as frames. The co-ordinates of these boxes are transformed from
+                    image co-ordinates to the crop co-ordinates
+        search_area_factor - The area of the extracted crop is search_area_factor^2 times box_extract area
+        output_sz - The size to which the extracted crops are resized
+
+    returns:
+        list - list of image crops
+        list - list of depth crops
+        list - box_gt location in the crop co-ordinates
+        """
+    if masks is None:
+        crops_resize_factors = [sample_target_depth(f, d, a, search_area_factor, output_sz)
+                                for f, d, a in zip(frames, depths, box_extract)]
+        frames_crop, depths_crop, resize_factors = zip(*crops_resize_factors)
+        masks_crop = None
+    else:
+        crops_resize_factors = [sample_target_depth(f, d, a, search_area_factor, output_sz, m)
+                                for f, d, a, m in zip(frames, depths, box_extract, masks)]
+        frames_crop, depths_crop, resize_factors, masks_crop = zip(*crops_resize_factors)
+    crop_sz = torch.Tensor([output_sz, output_sz])
+
+    # find the bb location in the crop
+    box_crop = [transform_image_to_crop(a_gt, a_ex, rf, crop_sz)
+                for a_gt, a_ex, rf in zip(box_gt, box_extract, resize_factors)]
+
+    return frames_crop, depths_crop, box_crop, masks_crop
 
 
 def sample_target_adaptive(im, target_bb, search_area_factor, output_sz, mode: str = 'replicate',

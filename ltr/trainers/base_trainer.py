@@ -172,7 +172,10 @@ class BaseTrainer:
         # Load network
         checkpoint_dict = loading.torch_load_legacy(checkpoint_path)
 
-        assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
+        # if checkpoint_dict['net_type'] == 'ATOMnet' and net_type == 'ATOMnet_Depth':
+        #     checkpoint_dict['net_type'] == 'ATOMnet_Depth'
+        ''' Song : use the atom_default checkpoints to train atom_depth'''
+        # assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
 
         if fields is None:
             fields = checkpoint_dict.keys()

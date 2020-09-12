@@ -730,7 +730,6 @@ class Tracker:
     def _read_depth(self, depth_file: str, ndims=3):
         dp = cv.imread(depth_file, -1)
         if ndims == 3:
-            dp = cv2.normalize(dp, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F)
-            dp = np.uint16(dp)
-            dp = cv.applyColorMap(dp, cv.COLORMAP_JET)
+            dp = cv.normalize(dp, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F) # [0, 1]
+            dp = cv.applyColorMap(np.uint8(dp), cv.COLORMAP_JET)
         return dp

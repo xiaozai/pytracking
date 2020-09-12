@@ -3,15 +3,12 @@ from pytracking.features.extractor import MultiResolutionExtractor
 from pytracking.features import deep
 import torch
 
-# from pytracking.evaluation.environment import EnvSettings
-from pytracking.evaluation.local import local_env_settings
-
 def parameters():
     params = TrackerParams()
 
     # These are usually set from outside
     params.debug = 0                        # Debug level
-    params.visualization = True            # Do visualization
+    params.visualization = False            # Do visualization
 
     # Use GPU or not (IoUNet requires this to be True)
     params.use_gpu = True
@@ -89,21 +86,20 @@ def parameters():
 
     # IoUNet parameters
     params.use_iou_net = True               # Use IoU net or not
+    params.box_refinement_space = 'relative'
     params.iounet_augmentation = False      # Use the augmented samples to compute the modulation vector
     params.iounet_k = 3                     # Top-k average to estimate final box
     params.num_init_random_boxes = 9        # Num extra random boxes in addition to the classifier prediction
     params.box_jitter_pos = 0.1             # How much to jitter the translation for random boxes
     params.box_jitter_sz = 0.5              # How much to jitter the scale for random boxes
     params.maximal_aspect_ratio = 6         # Limit on the aspect ratio
-    params.box_refinement_iter = 5          # Number of iterations for refining the boxes
-    params.box_refinement_step_length = 1   # Gradient step length in the bounding box refinement
+    params.box_refinement_iter = 10          # Number of iterations for refining the boxes
+    params.box_refinement_step_length = (2e-4, 10e-4) # 1   # Gradient step length in the bounding box refinement
     params.box_refinement_step_decay = 1    # Multiplicative step length decay (1 means no decay)
 
-    # envs = EnvSettings()
-    settings = local_env_settings()
     # Setup the feature extractor (which includes the IoUNet)
     deep_fparams = FeatureParams(feature_params=[deep_params])
-    deep_feat = deep.ATOMResNet18(net_path=settings.checkpoints_path, output_layers=['layer3'], fparams=deep_fparams, normalize_power=2)
+    deep_feat = deep.ATOMResNet18(net_path='atom_prob_ml', output_layers=['layer3'], fparams=deep_fparams, normalize_power=2)
     params.features = MultiResolutionExtractor([deep_feat])
 
     return params
