@@ -23,7 +23,8 @@ class TrackingSampler(torch.utils.data.Dataset):
     """
 
     def __init__(self, datasets, p_datasets, samples_per_epoch, max_gap,
-                 num_test_frames, num_train_frames=1, processing=no_processing, frame_sample_mode='causal', use_depth=False):
+                 num_test_frames, num_train_frames=1, processing=no_processing, frame_sample_mode='causal',
+                 use_depth=False, depth_normalize=False):
         """
         args:
             datasets - List of datasets to be used for training
@@ -54,6 +55,7 @@ class TrackingSampler(torch.utils.data.Dataset):
         self.frame_sample_mode = frame_sample_mode
 
         self.use_depth = use_depth
+        self.depth_normalize = depth_normalize
 
     def __len__(self):
         return self.samples_per_epoch
@@ -159,8 +161,8 @@ class TrackingSampler(torch.utils.data.Dataset):
             test_frame_ids = [1] * self.num_test_frames
 
         if self.use_depth:
-            train_frames, train_depths, train_anno, meta_obj_train = dataset.get_frames(seq_id, train_frame_ids, anno=seq_info_dict)
-            test_frames, test_depths, test_anno, meta_obj_test = dataset.get_frames(seq_id, test_frame_ids, anno=seq_info_dict)
+            train_frames, train_depths, train_anno, meta_obj_train = dataset.get_frames(seq_id, train_frame_ids, depth_normalize=self.depth_normalize, anno=seq_info_dict)
+            test_frames, test_depths, test_anno, meta_obj_test = dataset.get_frames(seq_id, test_frame_ids, depth_normalize=self.depth_normalize, anno=seq_info_dict)
         else:
             train_frames, train_anno, meta_obj_train = dataset.get_frames(seq_id, train_frame_ids, anno=seq_info_dict)
             test_frames, test_anno, meta_obj_test = dataset.get_frames(seq_id, test_frame_ids, anno=seq_info_dict)
@@ -194,10 +196,11 @@ class ATOMSampler(TrackingSampler):
     """ See TrackingSampler."""
 
     def __init__(self, datasets, p_datasets, samples_per_epoch, max_gap,
-                 num_test_frames=1, num_train_frames=1, processing=no_processing, frame_sample_mode='interval', use_depth=False):
+                 num_test_frames=1, num_train_frames=1, processing=no_processing, frame_sample_mode='interval',
+                 use_depth=False, depth_normalize=False):
         super().__init__(datasets=datasets, p_datasets=p_datasets, samples_per_epoch=samples_per_epoch, max_gap=max_gap,
                          num_test_frames=num_test_frames, num_train_frames=num_train_frames, processing=processing,
-                         frame_sample_mode=frame_sample_mode, use_depth=use_depth)
+                         frame_sample_mode=frame_sample_mode, use_depth=use_depth, depth_normalize=depth_normalize)
 
 class LWLSampler(torch.utils.data.Dataset):
     """ Class responsible for sampling frames from training sequences to form batches. Each training sample is a

@@ -79,6 +79,7 @@ class CDTB(BaseVideoDataset):
         sequence_meta_info = {s: self._read_meta(os.path.join(self.root, s)) for s in self.sequence_list}
         return sequence_meta_info
 
+    ''' No meta_infor.ini for CDTB dataset '''
     def _read_meta(self, seq_path):
         try:
             with open(os.path.join(seq_path, 'meta_info.ini')) as f:
@@ -131,7 +132,6 @@ class CDTB(BaseVideoDataset):
         occlusion_file = os.path.join(seq_path, "full-occlusion.tag")
         outOfFrame_file = os.path.join(seq_path, "out-of-frame.tag")
 
-
         with open(occlusion_file, 'r', newline='') as f:
             # occlusion = torch.ByteTensor([int(v[0]) for v in csv.reader(f)])
             occlusion = np.array([bool(int(v[0])) for v in csv.reader(f)], dtype=bool)
@@ -140,7 +140,6 @@ class CDTB(BaseVideoDataset):
             outOfFrame = np.array([bool(int(v[0])) for v in csv.reader(f)], dtype=bool)
         # target_visible = ~occlusion & (cover>0).byte()
         # target_visible = ~occlusion & ~outOfFrame
-        # target_visible = torch.logical_and(torch.logical_not(occlusion), torch.logical_not(outOfFrame))
         target_visible = torch.BoolTensor(~occlusion & ~outOfFrame)
 
         visible_ratio = torch.BoolTensor(outOfFrame).float() / 8
@@ -169,13 +168,13 @@ class CDTB(BaseVideoDataset):
     def _get_frame(self, seq_path, frame_id):
         return self.image_loader(self._get_frame_path(seq_path, frame_id))
 
-    def _get_depth(self, seq_path, frame_id, normalize=False):
+    def _get_depth(self, seq_path, frame_id, depth_normalize=False):
         ''' get the depth images
                 - if normalize: return colormap , h*w*3
                 - otherwise : return raw depth array, h*w
         '''
         depth_frame = cv.imread(self._get_depth_path(seq_path, frame_id), -1)
-        if normalize:
+        if depth_normalize:
             depth_frame = cv.normalize(depth_frame, depth_frame, 0, 255, cv.NORM_MINMAX)
             depth_frame = cv.applyColorMap(np.uint8(depth_frame), cv.COLORMAP_JET)
 
@@ -193,12 +192,12 @@ class CDTB(BaseVideoDataset):
         return obj_meta['object_class_name']
 
     ''' Instead of __get_item__ '''
-    def get_frames(self, seq_id, frame_ids, normalize=False, anno=None):
+    def get_frames(self, seq_id, frame_ids, depth_normalize=False, anno=None):
         seq_path = self._get_sequence_path(seq_id)
         obj_meta = None # self.sequence_meta_info[self.sequence_list[seq_id]]
 
         frame_list = [self._get_frame(seq_path, f_id) for f_id in frame_ids]
-        depth_list = [self._get_depth(seq_path, f_id, normalize=normalize) for f_id in frame_ids]
+        depth_list = [self._get_depth(seq_path, f_id, depth_normalize=depth_normalize) for f_id in frame_ids]
 
         if anno is None:
             anno = self.get_sequence_info(seq_id)

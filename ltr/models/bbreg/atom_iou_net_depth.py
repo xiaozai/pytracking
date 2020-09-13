@@ -82,8 +82,9 @@ class AtomIoUNet_Depth(nn.Module):
         feat1 = [f[0,...] if f.dim()==5 else f.reshape(-1, num_sequences, *f.shape[-3:])[0,...] for f in feat1]
         bb1 = bb1[0,...]
 
+        '''Song : use the depth to mask the feature'''
+
         # Get modulation vector
-        # Song : add the depth modulation
         modulation = self.get_modulation(feat1, bb1, depths1)
 
         iou_feat = self.get_iou_feat(feat2)
@@ -145,12 +146,12 @@ class AtomIoUNet_Depth(nn.Module):
             feat: Backbone features from reference images. Dims (batch, feature_dim, H, W).
             bb:  Target boxes (x,y,w,h) in image coords in the reference samples. Dims (batch, 4)."""
 
-        feat3_r, feat4_r = feat
-
-        c3_r = self.conv3_1r(feat3_r)
+        feat3_r, feat4_r = feat       # feat3_r : [64, 128, 36, 36]
+                                      # feat4_r : [64, 256, 18, 18]
+        c3_r = self.conv3_1r(feat3_r) #           [64, 128, 36, 36]
 
         # Add batch_index to rois
-        batch_size = bb.shape[0]
+        batch_size = bb.shape[0]      # bb : [64, 4]
         batch_index = torch.arange(batch_size, dtype=torch.float32).reshape(-1, 1).to(bb.device)
 
         # input bb is in format xywh, convert it to x0y0x1y1 format
@@ -158,19 +159,16 @@ class AtomIoUNet_Depth(nn.Module):
         bb[:, 2:4] = bb[:, 0:2] + bb[:, 2:4]
         roi1 = torch.cat((batch_index, bb), dim=1) # Song : using the depth to mask roi1
 
-        roi3r = self.prroi_pool3r(c3_r, roi1)     # Song : using the depth to mask here OR
+        roi3r = self.prroi_pool3r(c3_r, roi1)     # [64, 128, 3, 3]
 
-        c4_r = self.conv4_1r(feat4_r)
-        roi4r = self.prroi_pool4r(c4_r, roi1)
+        c4_r = self.conv4_1r(feat4_r)             # [64, 256, 18, 18]
+        roi4r = self.prroi_pool4r(c4_r, roi1)     # [64, 256, 1, 1]
 
-        fc3_r = self.fc3_1r(roi3r)
-
+        fc3_r = self.fc3_1r(roi3r)                # [64, 256, 1, 1]
         # Concatenate from block 3 and 4
-        fc34_r = torch.cat((fc3_r, roi4r), dim=1)
-
-        fc34_3_r = self.fc34_3r(fc34_r)
-        fc34_4_r = self.fc34_4r(fc34_r)
-
+        fc34_r = torch.cat((fc3_r, roi4r), dim=1) # [64, 256+256, 1, 1]
+        fc34_3_r = self.fc34_3r(fc34_r)           # [64, 256, 1, 1]
+        fc34_4_r = self.fc34_4r(fc34_r)           # [64, 256, 1, 1]
         return fc34_3_r, fc34_4_r
 
     def get_iou_feat(self, feat2):

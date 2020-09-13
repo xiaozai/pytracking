@@ -232,6 +232,39 @@ class ATOMProcessing_Depth(BaseProcessing):
         gt_iou = gt_iou * 2 - 1
         return proposals, gt_iou
 
+    def depth_converter(self, dp, bb, K=3, label='train'):
+        ''' Song
+            if train:
+                dp : [sequences=1, batch=64, 1, 288, 288]
+                bb : [sequences=1, batch=64, 4]
+            if test:
+                dp : [sequences=1, batch=64, 1, 288, 288]
+                bb : [sequences=1, batch=64, num_proposal=16, 4]
+        '''
+        num_sequences, num_batches, num_dims, row, col  = dp.shape
+
+        if num_dims == 1:
+            dp = torch.sequeeze(dp)
+
+        if label == 'train':
+            bb = torch.unsqueeze(bb, 2) # [seq, batch, 1, 4]
+
+        num_proposal = bb.shape[2]
+
+        dp = dp.cpu().numpy()
+        bb = bb.cpu().numpy()
+
+        for seq in range(num_sequences):
+            for batch in range(num_batches):
+                depth = dp[seq, batch, ...] # [288, 288]
+                for proposal in range(num_proposal):
+                    box = bb[seq, batch, proposal, :] # xywh
+                    box = [int(v) for v in box]
+                    depth_patch = depth[box[1]:box[1]+box[3], box[0]:box[0]+box[2]]
+
+                    sigma = torch.min(box[2:])
+
+
     def __call__(self, data: TensorDict):
         """
         args:
@@ -287,6 +320,10 @@ class ATOMProcessing_Depth(BaseProcessing):
             data = data.apply(stack_tensors)
         else:
             data = data.apply(lambda x: x[0] if isinstance(x, list) else x)
+
+        # Song : generate depth probability
+        data['train_depths'] = self.depth_converter(data['train_depths'], data['train_anno'], K=3, label='train')
+        data['test_depths'] = self.depth_converter(data['test_depths'], data['test_anno'], K=3, label='test')
 
         return data
 

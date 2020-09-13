@@ -23,6 +23,9 @@ def run(settings):
     settings.center_jitter_factor = {'train': 0, 'test': 4.5}
     settings.scale_jitter_factor = {'train': 0, 'test': 0.5}
 
+    settings.use_depth = True        # Song : use the depth channel as the Input
+    settings.depth_normalize = False # Song : if normalize, return depth colormap, else return h*w*1
+
     # Train datasets
     cdtb_train = CDTB(settings.env.cdtb_dir, split='train')
     # Validation datasets
@@ -63,7 +66,7 @@ def run(settings):
     # The sampler for training
     dataset_train = sampler.ATOMSampler([cdtb_train], [1], samples_per_epoch=1000*settings.batch_size, max_gap=50,
                                 processing=data_processing_train,
-                                use_depth=True)
+                                use_depth=settings.use_depth, depth_normalize=settings.depth_normalize)
 
     # The loader for training
     loader_train = LTRLoader('train', dataset_train, training=True, batch_size=settings.batch_size, num_workers=settings.num_workers,
@@ -72,7 +75,7 @@ def run(settings):
     # The sampler for validation
     dataset_val = sampler.ATOMSampler([cdtb_val], [1], samples_per_epoch=500*settings.batch_size, max_gap=50,
                                       processing=data_processing_val,
-                                      use_depth=True)
+                                      use_depth=settings.use_depth, depth_normalize=settings.depth_normalize)
 
     # The loader for validation
     loader_val = LTRLoader('val', dataset_val, training=False, batch_size=settings.batch_size, num_workers=settings.num_workers,
