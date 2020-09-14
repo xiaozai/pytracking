@@ -26,6 +26,11 @@ class AtomIoUNet_Depth(nn.Module):
         self.conv3_1r = conv(input_dim[0], 128, kernel_size=3, stride=1)
         self.conv3_1t = conv(input_dim[0], 256, kernel_size=3, stride=1)
 
+        self.depth_pool3_r = nn.MaxPool2d(8, stride=8)       # 288 => 36
+        self.depth_pool4_r = nn.MaxPool2d(16, stride=16)     # 288 => 18
+        self.depth_pool3_t = nn.MaxPool2d(8, stride=8)
+        self.depth_pool4_t = nn.MaxPool2d(16, stride=16)
+
         self.conv3_2t = conv(256, pred_input_dim[0], kernel_size=3, stride=1)
 
         self.prroi_pool3r = PrRoIPool2D(3, 3, 1/8)
@@ -72,26 +77,25 @@ class AtomIoUNet_Depth(nn.Module):
             bb1:  Target boxes (x,y,w,h) in image coords in the reference samples. Dims (images, sequences, 4).
             proposals2:  Proposal boxes for which the IoU will be predicted (images, sequences, num_proposals, 4)."""
 
-        assert bb1.dim() == 3
-        assert proposals2.dim() == 4
+        assert bb1.dim() == 3                      # [1, 64, 4]
+        assert proposals2.dim() == 4               # [1, 64, 16, 4]
 
-        num_images = proposals2.shape[0]
-        num_sequences = proposals2.shape[1]
-
+        num_images = proposals2.shape[0]           # 1
+        num_sequences = proposals2.shape[1]        # 64
+                                                   # feat1 : [64, 128, 36, 36], [64, 256, 18, 18]
         # Extract first train sample
         feat1 = [f[0,...] if f.dim()==5 else f.reshape(-1, num_sequences, *f.shape[-3:])[0,...] for f in feat1]
         bb1 = bb1[0,...]
 
-        '''Song : use the depth to mask the feature'''
-
         # Get modulation vector
         modulation = self.get_modulation(feat1, bb1, depths1)
 
-        iou_feat = self.get_iou_feat(feat2)
+        iou_feat = self.get_iou_feat(feat2, depths2)
 
         modulation = [f.reshape(1, num_sequences, -1).repeat(num_images, 1, 1).reshape(num_sequences*num_images, -1) for f in modulation]
 
         proposals2 = proposals2.reshape(num_sequences*num_images, -1, 4)
+
         # Song : add the depth modulation
         pred_iou = self.predict_iou(modulation, iou_feat, proposals2, depths2)
         return pred_iou.reshape(num_images, num_sequences, -1)
@@ -103,41 +107,37 @@ class AtomIoUNet_Depth(nn.Module):
             feat:  IoU features (from get_iou_feat) for test images. Dims (batch, feature_dim, H, W).
             proposals:  Proposal boxes for which the IoU will be predicted (batch, num_proposals, 4)."""
 
-        fc34_3_r, fc34_4_r = modulation
-        c3_t, c4_t = feat
+        fc34_3_r, fc34_4_r = modulation                                         # [64, 256, 1, 1]
+        c3_t, c4_t = feat                                                       # [64, 256, 36, 36], [64, 256, 18, 18]
 
         batch_size = c3_t.size()[0]
 
         # Modulation
         # Song : Here is different from the Paper !!!!!!!!!!
-        c3_t_att = c3_t * fc34_3_r.reshape(batch_size, -1, 1, 1)
-        c4_t_att = c4_t * fc34_4_r.reshape(batch_size, -1, 1, 1)
+        c3_t_att = c3_t * fc34_3_r.reshape(batch_size, -1, 1, 1)                # [64, 256, 36, 36]
+        c4_t_att = c4_t * fc34_4_r.reshape(batch_size, -1, 1, 1)                # [64, 256, 18, 18]
 
-        # Add batch_index to rois
+        # Add batch_index to rois, [batch=64, 1]
         batch_index = torch.arange(batch_size, dtype=torch.float32).reshape(-1, 1).to(c3_t.device)
-
         # Push the different rois for the same image along the batch dimension
-        num_proposals_per_batch = proposals.shape[1]
-
+        num_proposals_per_batch = proposals.shape[1]            # 16
         # input proposals2 is in format xywh, convert it to x0y0x1y1 format
-        proposals_xyxy = torch.cat((proposals[:, :, 0:2], proposals[:, :, 0:2] + proposals[:, :, 2:4]), dim=2)
-
+        proposals_xyxy = torch.cat((proposals[:, :, 0:2], proposals[:, :, 0:2] + proposals[:, :, 2:4]), dim=2) # [64, 16, 4]
         # Add batch index
-        # Song : add the depth here !!!!!!!!!!!!!!!!
         roi2 = torch.cat((batch_index.reshape(batch_size, -1, 1).expand(-1, num_proposals_per_batch, -1),
-                          proposals_xyxy), dim=2)
-        roi2 = roi2.reshape(-1, 5).to(proposals_xyxy.device)
+                          proposals_xyxy), dim=2)                               # [64, 16, 5]
+        roi2 = roi2.reshape(-1, 5).to(proposals_xyxy.device)                    # [1024, 5]
 
-        roi3t = self.prroi_pool3t(c3_t_att, roi2)
-        roi4t = self.prroi_pool4t(c4_t_att, roi2)
+        roi3t = self.prroi_pool3t(c3_t_att, roi2)                               # [64*16, 256, 5, 5],
+        roi4t = self.prroi_pool4t(c4_t_att, roi2)                               # [64*16, 256, 3, 3]
 
-        fc3_rt = self.fc3_rt(roi3t)
-        fc4_rt = self.fc4_rt(roi4t)
+        fc3_rt = self.fc3_rt(roi3t)                                             # [1024, 256]
+        fc4_rt = self.fc4_rt(roi4t)                                             # [1024, 256]
 
-        fc34_rt_cat = torch.cat((fc3_rt, fc4_rt), dim=1)
+        fc34_rt_cat = torch.cat((fc3_rt, fc4_rt), dim=1)                        # [1024, 512]
 
         iou_pred = self.iou_predictor(fc34_rt_cat).reshape(batch_size, num_proposals_per_batch)
-
+                                                                                # [64, 16]
         return iou_pred
 
     def get_modulation(self, feat, bb, depths):
@@ -146,18 +146,28 @@ class AtomIoUNet_Depth(nn.Module):
             feat: Backbone features from reference images. Dims (batch, feature_dim, H, W).
             bb:  Target boxes (x,y,w,h) in image coords in the reference samples. Dims (batch, 4)."""
 
-        feat3_r, feat4_r = feat       # feat3_r : [64, 128, 36, 36]
-                                      # feat4_r : [64, 256, 18, 18]
-        c3_r = self.conv3_1r(feat3_r) #           [64, 128, 36, 36]
+        batch_size = bb.shape[0]                                                # bb : [64, 4]
 
+        feat3_r, feat4_r = feat                                                 # feat3_r : [64, 128, 36, 36]
+                                                                                # feat4_r : [64, 256, 18, 18]
+        depth3_r = self.depth_pool3_r(depths.clone())                           # [64, 3, 36, 36]
+        depth4_r = self.depth_pool4_r(depths.clone())                           # [64, 3, 18, 18]
+
+        for feat, dp in zip(feat3_r, depth3_r):
+            # [128, 36, 36] * [3, 36, 36] => [128*3, 36, 36]
+            feat_d =
+
+            print(feat_d.shape)
+
+        c3_r = self.conv3_1r(feat3_r)                  #  [64, 128, 36, 36] ==> [64*K, 128, 36, 36 ???]
         # Add batch_index to rois
-        batch_size = bb.shape[0]      # bb : [64, 4]
+        # batch_size = bb.shape[0]                      # bb : [64, 4]
         batch_index = torch.arange(batch_size, dtype=torch.float32).reshape(-1, 1).to(bb.device)
 
         # input bb is in format xywh, convert it to x0y0x1y1 format
         bb = bb.clone()
         bb[:, 2:4] = bb[:, 0:2] + bb[:, 2:4]
-        roi1 = torch.cat((batch_index, bb), dim=1) # Song : using the depth to mask roi1
+        roi1 = torch.cat((batch_index, bb), dim=1) #[64, 5]
 
         roi3r = self.prroi_pool3r(c3_r, roi1)     # [64, 128, 3, 3]
 
@@ -171,11 +181,15 @@ class AtomIoUNet_Depth(nn.Module):
         fc34_4_r = self.fc34_4r(fc34_r)           # [64, 256, 1, 1]
         return fc34_3_r, fc34_4_r
 
-    def get_iou_feat(self, feat2):
+    def get_iou_feat(self, feat2, depths2):
         """Get IoU prediction features from a 4 or 5 dimensional backbone input."""
         feat2 = [f.reshape(-1, *f.shape[-3:]) if f.dim()==5 else f for f in feat2]
-        feat3_t, feat4_t = feat2
-        c3_t = self.conv3_2t(self.conv3_1t(feat3_t))
-        c4_t = self.conv4_2t(self.conv4_1t(feat4_t))
+        feat3_t, feat4_t = feat2                            # [64, 128, 36, 36], [64, 256, 18, 18]
+
+        depths3_t = self.depth_pool3_t(depths2.clone())     # [64, 16K, 36, 36]
+        depths4_t = self.depth_pool4_t(depths2.clone())     # [64, 16K, 18, 18]
+
+        c3_t = self.conv3_2t(self.conv3_1t(feat3_t))        # [64, 256, 36, 36]
+        c4_t = self.conv4_2t(self.conv4_1t(feat4_t))        # [64, 256, 18, 18]
 
         return c3_t, c4_t

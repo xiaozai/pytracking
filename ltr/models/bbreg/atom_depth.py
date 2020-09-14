@@ -20,7 +20,6 @@ class ATOMnet_Depth(nn.Module):
         self.feature_extractor = feature_extractor
         self.bb_regressor = bb_regressor
         self.bb_regressor_layer = bb_regressor_layer
-        # self.depth_converter = depth_converter
 
         if not extractor_grad:
             for p in self.feature_extractor.parameters():
@@ -52,13 +51,12 @@ class ATOMnet_Depth(nn.Module):
         train_feat_iou = [feat for feat in train_feat.values()] # layer3 : [64, 128, 36, 36], layer4 : [64, 256, 18, 18]
         test_feat_iou = [feat for feat in test_feat.values()]   # layer3 : [64, 128, 36, 36], layer4 : [64, 256, 18, 18]
 
-        # Song : convert depth image to object probablity based on the K-clusters of depths
-        # train_depths_prob = self.depth_converter(train_depths, train_bb, K=3, label='train')
-        # test_depths_prob = self.depth_converter(test_depths, test_proposals, K=3, label='test')
+        train_depths = train_depths.reshape(-1, *train_depths.shape[-3:]) # [1*64, K, 288, 288]
+        test_depths = test_depths.reshape(-1, *test_depths.shape[-3:])    # [1*64, KK, 288, 288]
 
         # Obtain iou prediction
         iou_pred = self.bb_regressor(train_feat_iou, test_feat_iou,
-                                     train_depths, test_depths,                            # [K, 288, 288], [K*proposal, 288, 288]
+                                     train_depths, test_depths,                                      # [K, 288, 288], [K*proposal, 288, 288]
                                      train_bb.reshape(num_train_images, num_sequences, 4),           # [1, 64, 4]
                                      test_proposals.reshape(num_train_images, num_sequences, -1, 4)) # [1, 64, 16, 4]
         return iou_pred
