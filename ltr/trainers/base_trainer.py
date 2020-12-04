@@ -145,8 +145,12 @@ class BaseTrainer:
 
         if checkpoint is None:
             # Load most recent checkpoint
-            checkpoint_list = sorted(glob.glob('{}/{}/{}_ep*.pth.tar'.format(self._checkpoint_dir,
+            # checkpoint_list = sorted(glob.glob('{}/{}/{}_ep*.pth.tar'.format(self._checkpoint_dir,
+            #                                                                  self.settings.project_path, net_type)))
+            checkpoint_list = sorted(glob.glob('{}/{}/{}_ep*.pth'.format(self._checkpoint_dir,
                                                                              self.settings.project_path, net_type)))
+            print('{}/{}/{}_ep*.pth'.format(self._checkpoint_dir, self.settings.project_path, net_type))
+            
             if checkpoint_list:
                 checkpoint_path = checkpoint_list[-1]
             else:
@@ -172,10 +176,7 @@ class BaseTrainer:
         # Load network
         checkpoint_dict = loading.torch_load_legacy(checkpoint_path)
 
-        # if checkpoint_dict['net_type'] == 'ATOMnet' and net_type == 'ATOMnet_Depth':
-        #     checkpoint_dict['net_type'] == 'ATOMnet_Depth'
-        ''' Song : use the atom_default checkpoints to train atom_depth'''
-        # assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
+        assert net_type == checkpoint_dict['net_type'], 'Network is not of correct type.'
 
         if fields is None:
             fields = checkpoint_dict.keys()

@@ -7,13 +7,24 @@ DatasetInfo = namedtuple('DatasetInfo', ['module', 'class_name', 'kwargs'])
 pt = "pytracking.evaluation.%sdataset"  # Useful abbreviations to reduce the clutter
 
 dataset_dict = dict(
-    cdtb=DatasetInfo(module=pt % "cdtb", class_name="CDTBDataset", kwargs=dict(split='train')),
     otb=DatasetInfo(module=pt % "otb", class_name="OTBDataset", kwargs=dict()),
     nfs=DatasetInfo(module=pt % "nfs", class_name="NFSDataset", kwargs=dict()),
     uav=DatasetInfo(module=pt % "uav", class_name="UAVDataset", kwargs=dict()),
     tpl=DatasetInfo(module=pt % "tpl", class_name="TPLDataset", kwargs=dict()),
     tpl_nootb=DatasetInfo(module=pt % "tpl", class_name="TPLDataset", kwargs=dict(exclude_otb=True)),
     vot=DatasetInfo(module=pt % "vot", class_name="VOTDataset", kwargs=dict()),
+    # CDTB , only RGB images
+    cdtb_color=DatasetInfo(module=pt % "cdtb_color", class_name="CDTBColorDataset", kwargs=dict()),
+    cdtb_color_val=DatasetInfo(module=pt % "cdtb_color_val", class_name="CDTBColorValDataset", kwargs=dict()),
+    # CDTB, only Depth images
+    cdtb_depth=DatasetInfo(module=pt % "cdtb_depth", class_name="CDTBDepthDataset", kwargs=dict()),
+    cdtb_depth_val=DatasetInfo(module=pt % "cdtb_depth_val", class_name="CDTBDepthValDataset", kwargs=dict()),
+    # CDTB, only Depth colormap images
+    cdtb_dcolormap=DatasetInfo(module=pt % "cdtb_dcolormap", class_name="CDTBDColormapDataset", kwargs=dict()),
+    cdtb_dcolormap_val=DatasetInfo(module=pt % "cdtb_dcolormap_val", class_name="CDTBDColormapValDataset", kwargs=dict()),
+    # CDTB, RGB+Depth images
+    cdtb_rgbd=DatasetInfo(module=pt % "cdtb_rgbd", class_name="CDTBRGBDDataset", kwargs=dict()),
+
     trackingnet=DatasetInfo(module=pt % "trackingnet", class_name="TrackingNetDataset", kwargs=dict()),
     got10k_test=DatasetInfo(module=pt % "got10k", class_name="GOT10KDataset", kwargs=dict(split='test')),
     got10k_val=DatasetInfo(module=pt % "got10k", class_name="GOT10KDataset", kwargs=dict(split='val')),

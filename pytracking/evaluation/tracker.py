@@ -103,7 +103,7 @@ class Tracker:
         tracker.visdom = self.visdom
         return tracker
 
-    def run_sequence(self, seq, use_depth=False, visualization=None, debug=None, visdom_info=None, multiobj_mode=None):
+    def run_sequence(self, seq, visualization=None, debug=None, visdom_info=None, multiobj_mode=None):
         """Run tracker on sequence.
         args:
             seq: Sequence to run the tracker on.
@@ -145,10 +145,10 @@ class Tracker:
         else:
             raise ValueError('Unknown multi object mode {}'.format(multiobj_mode))
 
-        output = self._track_sequence(tracker, seq, init_info, use_depth=use_depth)
+        output = self._track_sequence(tracker, seq, init_info)
         return output
 
-    def _track_sequence(self, tracker, seq, init_info, use_depth=False):
+    def _track_sequence(self, tracker, seq, init_info):
         # Define outputs
         # Each field in output is a list containing tracker prediction for each frame.
 
@@ -166,7 +166,8 @@ class Tracker:
 
         output = {'target_bbox': [],
                   'time': [],
-                  'segmentation': []}
+                  'segmentation': [],
+                  'confidence' : []} # Song !!!!
 
         def _store_outputs(tracker_out: dict, defaults=None):
             defaults = {} if defaults is None else defaults
@@ -176,20 +177,19 @@ class Tracker:
                     output[key].append(val)
 
         # Initialize
-        image = self._read_image(seq.frames[0])
-        if use_depth:
-            depth = self._read_depth(seq.depths[0])
-        else:
-            depth = None
+        # image = self._read_image(seq.frames[0])
+        ''' Song : read the depth or color images '''
+        image = self._read_image(seq.frames[0], is_depth=init_info.get('init_is_depth'), depth_threshold=init_info.get('init_depth_threshold'))
+        # if init_info.get('init_use_rgbd'):
+        #     depth = self._read_image(seq.depth_frames[0], is_depth=True, depth_threshold=init_info.get('init_depth_threshold'))
 
         if tracker.params.visualization and self.visdom is None:
-            self.visualize(image, init_info.get('init_bbox'))
+            self.visualize(image, init_info.get('init_bbox')) # Song !!!!
 
         start_time = time.time()
-        if use_depth:
-            out = tracker.initialize(image, depth, init_info)
-        else:
-            out = tracker.initialize(image, init_info)
+        out = tracker.initialize(image, init_info)
+        # if use_rgbd:
+        #   out = tracker.initialize(image, depth, init_info) # Song!!!! for RGB+D trackers
         if out is None:
             out = {}
 
@@ -197,17 +197,13 @@ class Tracker:
 
         init_default = {'target_bbox': init_info.get('init_bbox'),
                         'time': time.time() - start_time,
-                        'segmentation': init_info.get('init_mask')}
+                        'segmentation': init_info.get('init_mask'),
+                        'confidence' : 1.0}
 
         _store_outputs(out, init_default)
 
-        if use_depth:
-            input_list = zip(seq.frames[1:], seq.depths[1:])
-        else:
-            input_list = zip(seq.frames[1:], [None]*len(seq.frames[1:]))
-
-        # for frame_num, frame_path in enumerate(seq.frames[1:], start=1):
-        for frame_num, (frame_path, depth_path) in enumerate(input_list, start=1):
+        for frame_num, frame_path in enumerate(seq.frames[1:], start=1):
+        # for frame_num, frame_path in enumerate(zip(seq.frames[1:], seq.depth_frames[1:]), start=1):
             while True:
                 if not self.pause_mode:
                     break
@@ -217,22 +213,20 @@ class Tracker:
                 else:
                     time.sleep(0.1)
 
-            image = self._read_image(frame_path)
-            if use_depth:
-                depth = self._read_depth(depth_path)
-            else:
-                depth = None
+            # image = self._read_image(frame_path)
+            ''' Song '''
+            image = self._read_image(frame_path, is_depth=init_info.get('init_is_depth'), depth_threshold=init_info.get('init_depth_threshold')) # Song !!!!!
+            # if use_rgbd:
+            #     depth = self._read_image(depth_frame_path, is_depth=True, depth_threshold=init_info.get('init_depth_threshold'))
 
             start_time = time.time()
 
             info = seq.frame_info(frame_num)
             info['previous_output'] = prev_output
 
-            if use_depth:
-                out = tracker.track(image, depth, info)
-            else:
-                out = tracker.track(image, info)
+            out = tracker.track(image, info)
 
+            # out = tracker.track(image, depth, info) # Song , for RGB+D trackers
             prev_output = OrderedDict(out)
             _store_outputs(out, {'time': time.time() - start_time})
 
@@ -240,9 +234,9 @@ class Tracker:
             if self.visdom is not None:
                 tracker.visdom_draw_tracking(image, out['target_bbox'], segmentation)
             elif tracker.params.visualization:
-                self.visualize(image, out['target_bbox'], segmentation)
+                self.visualize(image, out['target_bbox'], segmentation) # Song !!!!
 
-        for key in ['target_bbox', 'segmentation']:
+        for key in ['target_bbox', 'segmentation', 'confidence']:
             if key in output and len(output[key]) <= 1:
                 output.pop(key)
 
@@ -723,13 +717,27 @@ class Tracker:
             self.reset_tracker()
             print("Resetting target pos to gt!")
 
-    def _read_image(self, image_file: str):
-        im = cv.imread(image_file)
-        return cv.cvtColor(im, cv.COLOR_BGR2RGB)
+    # def _read_image(self, image_file: str):
+    #     im = cv.imread(image_file)
+    #     return cv.cvtColor(im, cv.COLOR_BGR2RGB)
 
-    def _read_depth(self, depth_file: str, ndims=3):
-        dp = cv.imread(depth_file, -1)
-        if ndims == 3:
-            dp = cv.normalize(dp, None, alpha=0, beta=1, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F) # [0, 1]
-            dp = cv.applyColorMap(np.uint8(dp), cv.COLORMAP_JET)
-        return dp
+    def _read_image(self, image_file: str, is_depth=False, depth_threshold=8000):
+        if is_depth:
+            '''
+            Song : read the depth only, and return [depth, depth, depth] , W*H*3,
+                   normalize the depth into [0, 255]
+                   Treat the depth images as the gray images
+            '''
+            im = cv.imread(image_file, -1)
+            im[im>depth_threshold] = depth_threshold
+            im = cv.normalize(im, None, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_32F)
+            im = np.asarray(im, dtype=np.uint8)
+            im = np.expand_dims(im, axis=2)
+            im = np.tile(im, (1,1,3))
+            return im
+        else:
+            '''
+            Original code for loading RGB images
+            '''
+            im = cv.imread(image_file)
+            return cv.cvtColor(im, cv.COLOR_BGR2RGB)

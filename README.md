@@ -2,8 +2,8 @@
 A general python framework for visual object tracking and video object segmentation, based on **PyTorch**.
 
 ### LWL and KYS released!
-* Code for our ECCV 2020 paper [Know Your Surroundings: Exploiting Scene Information for Object Tracking](https://arxiv.org/pdf/2003.11014.pdf) is now available.  
-* Code for our ECCV 2020 paper [Learning What to Learn for Video Object Segmentation](https://arxiv.org/abs/2003.11540) is now available.  
+* Code for our **ECCV 2020 oral** paper [Learning What to Learn for Video Object Segmentation](https://arxiv.org/abs/2003.11540) is now available.  
+* Code for our **ECCV 2020** paper [Know Your Surroundings: Exploiting Scene Information for Object Tracking](https://arxiv.org/abs/2003.11014) is now available.  
 
 
 ## Highlights
@@ -148,11 +148,15 @@ python run_webcam.py dimp dimp50
 
 #### [ltr](ltr) - for training your tracker
 
-## Main Contributors
+## Contributors
 
+### Main Contributors
 * [Martin Danelljan](https://martin-danelljan.github.io/)  
-* [Goutam Bhat](https://www.vision.ee.ethz.ch/en/members/detail/407/)
-* [Felix Järemo-Lawin](https://liu.se/en/employee/felja34)
+* [Goutam Bhat](https://goutamgmb.github.io/)
+
+### Guest Contributors
+* [Felix Järemo-Lawin](https://liu.se/en/employee/felja34) [LWL]
 
 ## Acknowledgments
-We use the implementation of the Lovász-Softmax loss from https://github.com/bermanmaxim/LovaszSoftmax.
+* Thanks for the great [PreciseRoIPooling](https://github.com/vacancy/PreciseRoIPooling) module.  
+* We use the implementation of the Lovász-Softmax loss from https://github.com/bermanmaxim/LovaszSoftmax.  

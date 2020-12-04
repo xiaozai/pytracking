@@ -20,11 +20,11 @@ class BaseDataset:
 
 class Sequence:
     """Class for the sequence in an evaluation."""
-    def __init__(self, name, frames, dataset, ground_truth_rect, depths=None, ground_truth_seg=None, init_data=None,
-                 object_class=None, target_visible=None, object_ids=None, multiobj_mode=False):
+    def __init__(self, name, frames, dataset, ground_truth_rect, ground_truth_seg=None, init_data=None,
+                 object_class=None, target_visible=None, object_ids=None, multiobj_mode=False,
+                 is_depth=False, depth_threshold=8000, depth_frames=None):
         self.name = name
         self.frames = frames
-        self.depths = depths
         self.dataset = dataset
         self.ground_truth_rect = ground_truth_rect
         self.ground_truth_seg = ground_truth_seg
@@ -32,6 +32,9 @@ class Sequence:
         self.target_visible = target_visible
         self.object_ids = object_ids
         self.multiobj_mode = multiobj_mode
+        self.is_depth = is_depth               ## Song
+        self.depth_threshold = depth_threshold ## Song
+        self.depth_frames = depth_frames       ## Song, to use RGB + Detph together
         self.init_data = self._construct_init_data(init_data)
         self._ensure_start_frame()
 
@@ -87,6 +90,11 @@ class Sequence:
 
             if self.ground_truth_seg is not None:
                 init_data[0]['mask'] = self.ground_truth_seg[0]
+
+        # Song : !!!!
+        init_data[0]['is_depth'] = self.is_depth
+        init_data[0]['depth_threshold'] = self.depth_threshold
+        init_data[0]['use_rgbd'] = self.depth_frames is not None
 
         return init_data
 
@@ -147,14 +155,6 @@ class Sequence:
         return "{self.__class__.__name__} {self.name}, length={len} frames".format(self=self, len=len(self.frames))
 
 
-# class SequenceDepth(Sequence):
-#     '''
-#         Defined by Jinyu, add depths in the Sequence Class
-#     '''
-#     def __init__(self, name, frames, depths, dataset, ground_truth_rect, ground_truth_seg=None, init_data=None,
-#                  object_class=None, target_visible=None, object_ids=None, multiobj_mode=False):
-#         super().__init__(name=name, frames=frames, dataset=dataset, depths=depths, ground_truth_rect=ground_truth_rect, ground_truth_seg=ground_truth_seg, init_data=init_data,
-#                  object_class=object_class, target_visible=target_visible, object_ids=object_ids, multiobj_mode=multiobj_mode)
 
 class SequenceList(list):
     """List of sequences. Supports the addition operator to concatenate sequence lists."""

@@ -10,7 +10,7 @@ import ltr.data.transforms as tfm
 
 def run(settings):
     # Most common settings are assigned in the settings struct
-    settings.description = 'ATOM IoUNet with default settings, but additionally using CDTB colormap for training.'
+    settings.description = 'ATOM IoUNet with default settings, but additionally using CDTB depth for training.'
     settings.batch_size = 64
     settings.num_workers = 8
     settings.print_interval = 1

@@ -5,8 +5,6 @@ import torchvision.transforms as transforms
 from pytracking import TensorDict
 import ltr.data.processing_utils as prutils
 
-import cv2
-
 
 def stack_tensors(x):
     if isinstance(x, (list, tuple)) and isinstance(x[0], torch.Tensor):
@@ -157,7 +155,8 @@ class ATOMProcessing(BaseProcessing):
 
         return data
 
-class ATOMProcessing_Depth(BaseProcessing):
+
+class ATOMProcessing_depth_mask(BaseProcessing):
     """ The processing class used for training ATOM. The images are processed in the following way.
     First, the target bounding box is jittered by adding some noise. Next, a square region (called search region )
     centered at the jittered target center, and of area search_area_factor^2 times the area of the jittered box is
@@ -234,95 +233,21 @@ class ATOMProcessing_Depth(BaseProcessing):
         gt_iou = gt_iou * 2 - 1
         return proposals, gt_iou
 
-    def _pdf(self, x, mu=0.0):
-        '''Song
-            to generate the gaussian probability distribution
-        '''
-        x_shape = x.shape
-        sigma = np.min(x_shape) # H or W)
-
-        x_values = x.reshape((-1, 1))
-        x_values = -1.0 * np.square((x_values - mu) / sigma) / 2.0
-        dist = np.exp(x_values) / (sigma * np.sqrt(2.0*np.pi))
-        dist = dist.reshape(x_shape)
-        dist = cv2.normalize(dist, None, alpha=0, beta=1, norm_type=cv2.NORM_MINMAX, dtype=cv2.CV_32F)
-
-        return dist
-
-    def _generate_depth_probability_map(self, dp, bb, K=3, label='train'):
-        ''' Song
-            if train:
-                dp : [1, 1, 288, 288]
-                bb : [1, 4] ==> [1, 1, 4]
-            if test:
-                dp : [1, 1, 288, 288]
-                bb : [1, 16, 4]
-
-            compactness, labels, centers = cv2.kmeans(...)
-                compactness : It is the sum of squared distance from each point to their corresponding centers.
-                label       : This is the label array (same as 'code' in previous article) where each element marked '0', '1'.....
-                centers     : This is array of centers of clusters.
-
-        '''
-        num_batches, num_dims, row, col  = dp.shape
-
-        assert num_dims == 1
-
-        if label == 'train':
-            bb = torch.unsqueeze(bb, 1) # [1, 1, 4] or [1, 16, 4]
-
-        num_proposal = bb.shape[-2]
-
-        dp = dp.cpu().numpy() # convert to numpy array
-        bb = bb.cpu().numpy()
-
-        dp_prob_map = np.empty((num_batches, num_proposal*K, row, col), dtype=np.float32)
-
-        # K-means settings :
-        criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 10, 1.0) # Define criteria=(type,max_iter=10,epsilon=1.0)
-        flags = cv2.KMEANS_RANDOM_CENTERS                                        # Set flags (Just to avoid line break in the code)
-        bestLabels = None
-        attempts = 10
-        # perform kmeans to find the center depths
-        for batch in range(num_batches):
-            depth = dp[batch, 0, ...] # [288, 288]
-
-            for pp in range(num_proposal):
-                box = bb[batch, pp, ...]          # xywh
-                box = [int(v) for v in box]
-                # crop the RoI
-                depth_patch = depth[box[1]:box[1]+box[3], box[0]:box[0]+box[2]]
-
-                try:
-                    compactness, labels, centers = cv2.kmeans(depth_patch.reshape((-1,1)), K, bestLabels, criteria, attempts, flags)
-                except:
-                    # if error : Number of clusters should be more than number of elements (expected: 'N >= K')
-                    # so use the center pixel as the center Or use the mean depth
-                    if np.min(depth_patch.shape) == 0:
-                        # sometimes the depth_patch is (h, 0) or (0, w) !!!!
-                        centers = [0 for kk in range(K)]
-                    else:
-                        centers = [np.mean(depth_patch) for kk in range(K)]
-                # generate the probability map
-                for kk in range(K):
-                    dp_prob_map[batch, pp*K+kk, ...] = self._pdf(np.copy(depth), mu=centers[kk])
-
-        return torch.from_numpy(dp_prob_map)
-
     def __call__(self, data: TensorDict):
         """
         args:
             data - The input data, should contain the following fields:
-                'train_images', 'train_depths',  'test_images', 'test_depths', 'train_anno', 'test_anno'
+                'train_images', 'train_depths',  test_images', 'test_depths', 'train_anno', 'test_anno'
         returns:
             TensorDict - output data block with following fields:
-                'train_images', 'train_depths', 'test_images', 'test_depths', 'train_anno', 'test_anno', 'test_proposals', 'proposal_iou'
+                'train_images', 'test_images', 'train_anno', 'test_anno', 'test_proposals', 'proposal_iou'
         """
         # Apply joint transforms
-        # Song: no need to add depth, sicne self.transform['joint'] is toGrayscale, no need for depth
         if self.transform['joint'] is not None:
+
             data['train_images'], data['train_anno'] = self.transform['joint'](image=data['train_images'], bbox=data['train_anno'])
-            data['test_images'],  data['test_anno'] = self.transform['joint'](image=data['test_images'], bbox=data['test_anno'], new_roll=False)
+            data['test_images'], data['test_anno'] = self.transform['joint'](image=data['test_images'], bbox=data['test_anno'], new_roll=False)
+
 
         for s in ['train', 'test']:
             assert self.mode == 'sequence' or len(data[s + '_images']) == 1, \
@@ -331,32 +256,29 @@ class ATOMProcessing_Depth(BaseProcessing):
             # Add a uniform noise to the center pos
             jittered_anno = [self._get_jittered_box(a, s) for a in data[s + '_anno']]
 
+            '''
+                Song !!!!!, masking the rgb crops with corespnding depth area
+            '''
             # Crop image region centered at jittered_anno box
-            # Song add depth
             # crops, boxes, _ = prutils.jittered_center_crop(data[s + '_images'], jittered_anno, data[s + '_anno'],
             #                                                self.search_area_factor, self.output_sz)
-            crops, crops_depth, boxes, _ = prutils.jittered_center_crop_depth(data[s + '_images'], data[s + '_depths'], jittered_anno, data[s + '_anno'],
-                                                           self.search_area_factor, self.output_sz)
-            # Apply transforms, ToTensorAndJitter, and Normalize
+            crops, depth_crops, boxes, _ = prutils.jittered_center_crop_depth_mask(data[s + '_images'], data[s + '_depths'],
+                                                                      jittered_anno, data[s + '_anno'],
+                                                                      self.search_area_factor, self.output_sz)
+            print(crops.shape)
+            print(depth_crops.shape)
+            # Apply transforms
             data[s + '_images'], data[s + '_anno'] = self.transform[s](image=crops, bbox=boxes, joint=False)
-
-            # Song : add depth, just need ToTensor,
-            if isinstance(crops_depth, (list, tuple)):
-                data[s + '_depths'] = [torch.from_numpy(np.asarray(x).transpose((2, 0, 1))) for x in  crops_depth]
-            else:
-                crops_depth = np.asarray(crops_depth)
-                if len(crops_depth.shape) == 3:
-                    data[s + '_depths'] = [torch.from_numpy(np.asarray(crops_depth).transpose((2, 0, 1)))]
-                elif len(crops_depth.shape) == 4:
-                    data[s + '_depths'] = [torch.from_numpy(np.asarray(crops_depth).transpose((0, 3, 1, 2)))]
-                else:
-                    print('crops_depth dimensions error, num_dim=', np.ndim(crops_depth))
-                    data[s + '_depths'] = torch.from_numpy(np.asarray(crops_depth))
+            data[s + '_depths'] = depth_crops
         # Generate proposals
-        frame2_proposals, gt_iou = zip(*[self._generate_proposals(a) for a in data['test_anno']])
+        frame2_proposals, gt_iou = zip(*[self._generate_proposals(a) for a in data['test_anno']]) # proposals are boxes
 
         data['test_proposals'] = list(frame2_proposals)
         data['proposal_iou'] = list(gt_iou)
+
+        '''
+        Song : mask the crops with depth
+        '''
 
         # Prepare output
         if self.mode == 'sequence':
@@ -364,12 +286,7 @@ class ATOMProcessing_Depth(BaseProcessing):
         else:
             data = data.apply(lambda x: x[0] if isinstance(x, list) else x)
 
-        # Song : generate depth probability
-        data['train_depths'] = self._generate_depth_probability_map(data['train_depths'], data['train_anno'], K=3, label='train')
-        data['test_depths'] = self._generate_depth_probability_map(data['test_depths'], data['test_proposals'], K=3, label='test')
-
         return data
-
 
 class KLBBregProcessing(BaseProcessing):
     """ Based on ATOMProcessing. It supports training ATOM using the Maximum Likelihood or KL-divergence based learning

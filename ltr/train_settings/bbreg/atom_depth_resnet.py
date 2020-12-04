@@ -10,7 +10,7 @@ import ltr.data.transforms as tfm
 
 def run(settings):
     # Most common settings are assigned in the settings struct
-    settings.description = 'ATOM IoUNet with default settings, but additionally using CDTB colormap for training.'
+    settings.description = 'ATOM IoUNet with default settings, but additionally using CDTB depth for training. And ResNet also from scratch'
     settings.batch_size = 64
     settings.num_workers = 8
     settings.print_interval = 1
@@ -87,12 +87,13 @@ def run(settings):
                            shuffle=False, drop_last=True, epoch_interval=5, stack_dim=1)
 
     # Create network and actor
-    net = atom_models.atom_resnet18(backbone_pretrained=True)
+    net = atom_models.atom_resnet18(backbone_pretrained=False) # Song : with out Pretrained !!!!!!
     objective = nn.MSELoss()
     actor = actors.AtomActor(net=net, objective=objective)
 
     # Optimizer
-    optimizer = optim.Adam(actor.net.bb_regressor.parameters(), lr=1e-3)
+    parameters = list(actor.net.bb_regressor.parameters()) + list(actor.net.feature_extractor.parameters()) # Song !!!!!
+    optimizer = optim.Adam(parameters, lr=1e-3)
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.2)
 
     # Create trainer

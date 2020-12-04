@@ -9,9 +9,7 @@ class EnvSettings:
         self.results_path = '{}/tracking_results/'.format(pytracking_path)
         self.segmentation_path = '{}/segmentation_results/'.format(pytracking_path)
         self.network_path = '{}/networks/'.format(pytracking_path)
-        self.checkpoints_path = '/home/yan/Desktop/pytracking_checkpoints/atom_default.pth'
         self.result_plot_path = '{}/result_plots/'.format(pytracking_path)
-        self.cdtb_path = '/home/yan/Data2/CDTB/sequences/'
         self.otb_path = ''
         self.nfs_path = ''
         self.uav_path = ''
@@ -66,6 +64,3 @@ def env_settings():
         create_default_local_file()
         raise RuntimeError('YOU HAVE NOT SETUP YOUR local.py!!!\n Go to "{}" and set all the paths you need. '
                            'Then try to run again.'.format(env_file))
-
-if __name__ == '__main__':
-    env_settings()

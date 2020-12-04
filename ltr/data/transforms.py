@@ -36,7 +36,7 @@ class Transform:
         if len(transforms) == 1 and isinstance(transforms[0], (list, tuple)):
             transforms = transforms[0]
         self.transforms = transforms
-        self._valid_inputs = ['image', 'depth', 'coords', 'bbox', 'mask']
+        self._valid_inputs = ['image', 'coords', 'bbox', 'mask']
         self._valid_args = ['joint', 'new_roll']
         self._valid_all = self._valid_inputs + self._valid_args
 

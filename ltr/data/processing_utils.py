@@ -4,8 +4,19 @@ import cv2 as cv
 import random
 import torch.nn.functional as F
 from .bounding_box_utils import rect_to_rel, rel_to_rect
+import scipy.stats
 
-import numpy as np
+import math
+
+def gaussian_prob(x, mu, std):
+    '''
+    Song : the depth value closer to the mu (center depth value) obtains the largest weights
+    '''
+    var = float(std)**2
+    denom = (2*math.pi*var)**.5
+    num = np.exp(-(x-float(mu))**2/(2*var))
+    # return num/denom
+    return num
 
 def sample_target(im, target_bb, search_area_factor, output_sz=None, mask=None):
     """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
@@ -65,24 +76,24 @@ def sample_target(im, target_bb, search_area_factor, output_sz=None, mask=None):
             return im_crop_padded, 1.0
         return im_crop_padded, 1.0, mask_crop_padded
 
-def sample_target_depth(im, dp, target_bb, search_area_factor, output_sz=None, mask=None):
+def sample_target_depth_mask(im, dp, target_bb, search_area_factor, output_sz=None, mask=None):
     """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
 
     args:
         im - cv image
-        dp - cv image
+        dp - cv image, H*W
         target_bb - target box [x, y, w, h]
         search_area_factor - Ratio of crop size to target size
         output_sz - (float) Size to which the extracted crop is resized (always square). If None, no resizing is done.
 
     returns:
-        cv image - extracted crop
+        cv image - extracted crop , masking with depths
         float - the factor by which the crop has been resized to make the crop size equal output_size
+
+
+    Song : what is the difference between depth and mask ????
     """
     x, y, w, h = target_bb.tolist()
-
-    # Song : cv will change the dims of depth when h*w*1
-    nDim_depth = len(dp.shape)
 
     # Crop image
     crop_sz = math.ceil(math.sqrt(w * h) * search_area_factor)
@@ -104,32 +115,70 @@ def sample_target_depth(im, dp, target_bb, search_area_factor, output_sz=None, m
 
     # Crop target
     im_crop = im[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad, :]
-    dp_crop = dp[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad, :] # Song : crop the depth same as the rgb
+
+    # im is grayscale image already, [gray, gray, gray], so it should be H*W*3
+    print('song in processing_utils.;py im_crop.shape', im_crop.shape)
+
     if mask is not None:
         mask_crop = mask[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad]
+
+    dp_crop = dp[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad]
+    print('song in processing_utils.;py dp_crop.shape', dp_crop.shape)
     # Pad
     im_crop_padded = cv.copyMakeBorder(im_crop, y1_pad, y2_pad, x1_pad, x2_pad, cv.BORDER_REPLICATE)
-    dp_crop_padded = cv.copyMakeBorder(dp_crop, y1_pad, y2_pad, x1_pad, x2_pad, cv.BORDER_REPLICATE)
+    print('song in processing_utils.;py im_crop_padded.shape', im_crop_padded.shape)
     if mask is not None:
         mask_crop_padded = F.pad(mask_crop, pad=(x1_pad, x2_pad, y1_pad, y2_pad), mode='constant', value=0)
+
+    dp_crop_padded = F.pad(dp_crop, pad=(x1_pad, x2_pad, y1_pad, y2_pad), mode='constant', value=0)
+
+    print('song in processing_utils.;py dp_crop_padded.shape', dp_crop_padded.shape)
+
+    '''
+        convert dp to depth-based Gaussian Probability map
+        then multiply with rgb crops
+
+        Method #1, choose the center pixel as the default the depth value => easily to get the background
+        Method #2, choose the most frequent depth values => histogram ??
+
+        for histogam , bins = 3 ? one for BG, one for target, one for possible distractor
+
+        further , we should use the attention here for find the possible target depth values
+    '''
+
+    # # To estimation the possible depth value for target
+    # num_bins = 3
+    # dp_values = np.array(dp, dtype=np.float32).flatten()
+    # dp_values.sort()
+    # hist, bin_edges = np.histogram(dp_values, bins=num_bins)
+    # hist = list(hist)
+    # possible_target_depthIdx = hist.index(np.max(hist))
+    # bin_lower = bin_edges[possible_target_depthIdx]
+    # bin_upper = bin_edges[possible_target_depthIdx+1]
+    # depth_in_bin = dp_values[dp_values>=bin_lower]
+    # depth_in_bin = depth_in_binp[depth_in_bin<=bin_upper]
+    # possible_target_depth = np.mean(depth_in_bin) + 0.1 # to avoid the zeros
+    #
+    # # to obtain the Gaussian probability map
+    # sigma = bin_upper - bin_lower + 1
+    # # prob_map = scipy.stats.norm(possible_target_depth, sigma).pdf(dp_crop_padded)
+    # prob_map = gaussian_prob(dp_crop_padded, possible_target_depth, sigma)
+    #
+    # # mask the img_crop_padded using the prob_map ???
 
     if output_sz is not None:
         resize_factor = output_sz / crop_sz
         im_crop_padded = cv.resize(im_crop_padded, (output_sz, output_sz))
-        dp_crop_padded = cv.resize(dp_crop_padded, (output_sz, output_sz))
-        # Added by Song
-        if len(dp_crop_padded.shape) < nDim_depth:
-            dp_crop_padded = np.expand_dims(dp_crop_padded, -1)
+        dp_crop_padded = F.interpolate(dp_crop_padded[None, None], (output_sz, output_sz), mode='bilinear', align_corners=False)[0, 0]
+
         if mask is None:
             return im_crop_padded, dp_crop_padded, resize_factor
         mask_crop_padded = \
         F.interpolate(mask_crop_padded[None, None], (output_sz, output_sz), mode='bilinear', align_corners=False)[0, 0]
+
         return im_crop_padded, dp_crop_padded, resize_factor, mask_crop_padded
 
     else:
-        # Added by Song
-        if len(dp_crop_padded.shape) < nDim_depth:
-            dp_crop_padded = np.expand_dims(dp_crop_padded, -1)
         if mask is None:
             return im_crop_padded, dp_crop_padded, 1.0
         return im_crop_padded, dp_crop_padded, 1.0, mask_crop_padded
@@ -194,14 +243,13 @@ def jittered_center_crop(frames, box_extract, box_gt, search_area_factor, output
 
     return frames_crop, box_crop, masks_crop
 
-def jittered_center_crop_depth(frames, depths, box_extract, box_gt, search_area_factor, output_sz, masks=None):
+def jittered_center_crop_depth_mask(frames, depths, box_extract, box_gt, search_area_factor, output_sz, masks=None):
     """ For each frame in frames, extracts a square crop centered at box_extract, of area search_area_factor^2
     times box_extract area. The extracted crops are then resized to output_sz. Further, the co-ordinates of the box
     box_gt are transformed to the image crop co-ordinates
 
     args:
         frames - list of frames
-        depths - list of depths
         box_extract - list of boxes of same length as frames. The crops are extracted using anno_extract
         box_gt - list of boxes of same length as frames. The co-ordinates of these boxes are transformed from
                     image co-ordinates to the crop co-ordinates
@@ -210,25 +258,26 @@ def jittered_center_crop_depth(frames, depths, box_extract, box_gt, search_area_
 
     returns:
         list - list of image crops
-        list - list of depth crops
         list - box_gt location in the crop co-ordinates
         """
+
     if masks is None:
-        crops_resize_factors = [sample_target_depth(f, d, a, search_area_factor, output_sz)
+        crops_resize_factors = [sample_target_depth_mask(f, d, a, search_area_factor, output_sz)
                                 for f, d, a in zip(frames, depths, box_extract)]
-        frames_crop, depths_crop, resize_factors = zip(*crops_resize_factors)
+        frames_crop, depths_prob, resize_factors = zip(*crops_resize_factors)
         masks_crop = None
     else:
-        crops_resize_factors = [sample_target_depth(f, d, a, search_area_factor, output_sz, m)
+        crops_resize_factors = [sample_target_depth_mask(f, d, a, search_area_factor, output_sz, m)
                                 for f, d, a, m in zip(frames, depths, box_extract, masks)]
-        frames_crop, depths_crop, resize_factors, masks_crop = zip(*crops_resize_factors)
+        frames_crop, depths_prob, resize_factors, masks_crop = zip(*crops_resize_factors)
+
     crop_sz = torch.Tensor([output_sz, output_sz])
 
     # find the bb location in the crop
     box_crop = [transform_image_to_crop(a_gt, a_ex, rf, crop_sz)
                 for a_gt, a_ex, rf in zip(box_gt, box_extract, resize_factors)]
 
-    return frames_crop, depths_crop, box_crop, masks_crop
+    return frames_crop, depths_prob, box_crop, masks_crop
 
 
 def sample_target_adaptive(im, target_bb, search_area_factor, output_sz, mode: str = 'replicate',

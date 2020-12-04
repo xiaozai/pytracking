@@ -28,7 +28,7 @@ class AtomActor(BaseActor):
 
         return loss, stats
 
-class AtomActor_Depth(BaseActor):
+class AtomActor_depth_mask(BaseActor):
     """ Actor for training the IoU-Net in ATOM"""
     def __call__(self, data):
         """
@@ -41,7 +41,10 @@ class AtomActor_Depth(BaseActor):
             states  -  dict containing detailed losses
         """
         # Run network to obtain IoU prediction for each proposal in 'test_proposals'
-        iou_pred = self.net(data['train_images'], data['train_depths'], data['test_images'], data['test_depths'],data['train_anno'], data['test_proposals'])
+        # iou_pred = self.net(data['train_images'], data['test_images'], data['train_anno'], data['test_proposals'])
+        iou_pred = self.net(data['train_images'], data['train_depths'],
+                            data['test_images'], data['test_depths'],
+                            data['train_anno'], data['test_proposals'])
 
         iou_pred = iou_pred.view(-1, iou_pred.shape[2])
         iou_gt = data['proposal_iou'].view(-1, data['proposal_iou'].shape[2])
@@ -54,6 +57,7 @@ class AtomActor_Depth(BaseActor):
                  'Loss/iou': loss.item()}
 
         return loss, stats
+
 
 
 class AtomBBKLActor(BaseActor):

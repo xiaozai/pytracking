@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch.optim as optim
-from ltr.dataset import Lasot, TrackingNet, MSCOCOSeq, Got10k, CDTB_depth
+from ltr.dataset import Lasot, TrackingNet, MSCOCOSeq, Got10k, CDTB_color
 from ltr.data import processing, sampler, LTRLoader
 import ltr.models.bbreg.atom as atom_models
 from ltr import actors
@@ -10,7 +10,7 @@ import ltr.data.transforms as tfm
 
 def run(settings):
     # Most common settings are assigned in the settings struct
-    settings.description = 'ATOM IoUNet with default settings, but additionally using CDTB colormap for training.'
+    settings.description = 'ATOM IoUNet with default settings, but additionally using CDTB color for training.'
     settings.batch_size = 64
     settings.num_workers = 8
     settings.print_interval = 1
@@ -28,11 +28,11 @@ def run(settings):
     # trackingnet_train = TrackingNet(settings.env.trackingnet_dir, set_ids=list(range(4)))
     # coco_train = MSCOCOSeq(settings.env.coco_dir)
 
-    cdtb_train = CDTB_depth(settings.env.cdtb_dir, split='train')
+    cdtb_train = CDTB_color(settings.env.cdtb_dir, split='train')
 
     # Validation datasets
     # got10k_val = Got10k(settings.env.got10k_dir, split='votval')
-    cdtb_val = CDTB_depth(settings.env.cdtb_dir, split='val')
+    cdtb_val = CDTB_color(settings.env.cdtb_dir, split='val')
 
     # The joint augmentation transform, that is applied to the pairs jointly
     transform_joint = tfm.Transform(tfm.ToGrayscale(probability=0.05))

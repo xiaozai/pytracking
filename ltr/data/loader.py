@@ -4,7 +4,8 @@ import importlib
 import collections
 from torch._six import string_classes, int_classes
 from pytracking import TensorDict, TensorList
-
+import re
+import numpy as np
 
 def _check_use_shared_memory():
     if hasattr(torch.utils.data.dataloader, '_use_shared_memory'):
@@ -88,7 +89,8 @@ def ltr_collate_stack1(batch):
         elem = batch[0]
         if elem_type.__name__ == 'ndarray':
             # array of string classes and object
-            if torch.utils.data.dataloader.re.search('[SaUO]', elem.dtype.str) is not None:
+            # if torch.utils.data.dataloader.re.search('[SaUO]', elem.dtype.str) is not None:
+            if re.search('[SaUO]', elem.dtype.str) is not None:
                 raise TypeError(error_msg.format(elem.dtype))
 
             return torch.stack([torch.from_numpy(b) for b in batch], 1)
