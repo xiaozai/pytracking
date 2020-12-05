@@ -76,7 +76,7 @@ class ATOMnet_depth_mask(nn.Module):
             for p in self.feature_extractor.parameters():
                 p.requires_grad_(False)
 
-    def forward(self, train_imgs, train_depths, test_imgs, train_depths, train_bb, test_proposals):
+    def forward(self, train_imgs, train_depths, test_imgs, test_depths, train_bb, test_proposals):
         """ Forward pass
         Note: If the training is done in sequence mode, that is, test_imgs.dim() == 5, then the batch dimension
         corresponds to the first dimensions. test_imgs is thus of the form [sequence, batch, feature, row, col]
