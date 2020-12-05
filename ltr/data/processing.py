@@ -20,6 +20,126 @@ def gaussian_prob(x, mu, std):
     # return num/denom
     return num
 
+def candidate_depth_from_histogram(depth_img, box, num_bins=8):
+    '''
+    Song : to select the candidate depth and the corresponding depth-based probability map
+
+    inputs :
+        - depth_img, the depth images , usually is the search region
+        - box, (x,y,w,h), GT box
+        - num_bins , int, the number of the bins in the histogram
+
+    return :
+        - candidate_depth, the estimated depth value for the target
+        - prob_map, the depth-based probability map (Gaussian-like)
+    '''
+
+    # 1) crop the depth area
+    box_depths = depth_img[box[1]:box[1]+box[3], box[0]:box[0]+box[2]]
+    center_depth = depth_img[int((box[1]+box[3])/2.0), int((box[0]+box[2])/2.0)]
+
+    dp_values = np.array(box_depths, dtype=np.float32).flatten()
+    dp_values.sort()
+    # print(dp_values)
+
+    max_depth_img = np.max(depth_img.flatten())
+    max_depth_box = dp_values[-1]
+
+    # 2) perform the historgram to count the frequency of the depth values
+    hist, bin_edges = np.histogram(dp_values, bins=num_bins)
+    hist = list(hist)
+
+    # 3) select the candidate depth
+    candidate_idx = hist.index(np.max(hist))
+    bin_lower = bin_edges[candidate_idx]
+    bin_upper = bin_edges[candidate_idx+1]
+
+    if bin_upper == max_depth_img:
+        '''
+        We assume that the largest depth belongs to the background
+
+        if not the largest depth in the search region ,
+            we choose the top 1 as the candidate depth for target
+            and use the mean value of bin
+        else
+            choose the 2nd as the candidate
+        '''
+        sorted_hist = hist
+        sorted_hist.sort()
+        # print(sorted_hist)
+        candiate_idx = hist.index(sorted_hist[-2]) # 2nd largest
+        bin_lower = bin_edges[candidate_idx]
+        bin_upper = bin_edges[candidate_idx+1]
+
+    depth_in_bin = dp_values[dp_values>=bin_lower]
+    depth_in_bin = depth_in_bin[depth_in_bin<=bin_upper]
+    candidate_depth = np.mean(depth_in_bin) + 0.1 # to avoid the zeros
+
+    # if bin_upper == max_depth_box:
+    #     '''
+    #     Sometimes the largest depth in the box is also the background
+    #     check if the candidate depth is same as the center one
+    #
+    #     usually we assume that the target should locates in the center of the box
+    #
+    #     hard-programming ????
+    #     '''
+    #     if abs(bin_upper - center_depth) > 1000:
+    #         candidate_depth = center_depth
+
+    # 4) obtain the depth-based Gaussian probability map
+    sigma = (bin_upper - bin_lower + 1) / 2.0
+    prob_map = gaussian_prob(depth_img, candidate_depth, sigma)
+
+    return prob_map, candidate_depth
+
+# def plot_prob_map():
+    # ''' Example Plot '''
+    # print(s)
+    # fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2)
+    # rgb = data['train_images'][0].numpy() # (3, 288, 288)
+    # rgb = np.transpose(rgb, (1, 2, 0))    # (288, 288, 3) normalized rgb image
+    # # new_image_blue, new_image_green, new_image_red = rgb
+    # # rgb = np.dstack([new_image_red, new_image_green, new_image_blue])
+    # ax1.imshow(rgb)
+    # rect = data['train_anno'][0].numpy()
+    # rect1 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    # ax1.add_patch(rect1)
+    # dp_colormap = data['train_depths'][0]
+    # dp_colormap = cv.normalize(dp_colormap, None, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8UC1)
+    # dp_colormap = cv.applyColorMap(dp_colormap, cv.COLORMAP_JET)
+    #
+    # ax2.imshow(dp_colormap)
+    # rect2 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    # ax2.add_patch(rect2)
+    #
+    #
+    # rgb_copy = data['train_images_copy'][0]
+    # ax3.imshow(rgb_copy)
+    # rect3 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    # ax3.add_patch(rect3)
+    #
+    # ax4.imshow(prob_map)
+    # rect4 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    # ax4.add_patch(rect4)
+    #
+    #
+    # masked_rgb_copy = rgb_copy
+    # masked_rgb_copy[depth_mask==0] = 0
+    # ax5.imshow(masked_rgb_copy)
+    # rect5 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    # ax5.add_patch(rect5)
+    #
+    # masked_rgb = rgb
+    # masked_rgb[depth_mask==0] = 0
+    # ax6.imshow(masked_rgb)
+    # rect6 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    # ax6.add_patch(rect6)
+    #
+    # plt.show()
+    # # plt.pause(5)
+    # plt.close()
+
 def stack_tensors(x):
     if isinstance(x, (list, tuple)) and isinstance(x[0], torch.Tensor):
         return torch.stack(x)
@@ -278,10 +398,11 @@ class ATOMProcessing_depth_mask(BaseProcessing):
             crops, depth_crops, boxes, _ = prutils.jittered_center_crop_depth_mask(data[s + '_images'], data[s + '_depths'],
                                                                       jittered_anno, data[s + '_anno'],
                                                                       self.search_area_factor, self.output_sz)
-
+            crops_copy = crops
             # Apply transforms
             data[s + '_images'], data[s + '_anno'] = self.transform[s](image=crops, bbox=boxes, joint=False)
             data[s + '_depths'] = depth_crops
+            data[s + '_images_copy'] = crops_copy
         # Generate proposals
         frame2_proposals, gt_iou = zip(*[self._generate_proposals(a) for a in data['test_anno']]) # proposals are boxes
 
@@ -290,64 +411,34 @@ class ATOMProcessing_depth_mask(BaseProcessing):
 
         '''
         Song : 1)  to obtain the depth-based probability map
+
+            Method #1 is the histogram of the depth values, choose the candidate depth with high frequency
+
+            Method #2 is using the K-Means, choose the center depth of the candiate with high frequency
         '''
 
-        train_images = data['train_images'][0].numpy()
-        train_anno = data['train_anno'][0].numpy().astype(int) # np.floor(data['train_anno'][0].numpy())
-        print(train_anno)
+        train_anno = data['train_anno'][0].numpy().astype(int)
         train_depths = data['train_depths'][0]
 
-        box_depths = train_depths[train_anno[1]:train_anno[1]+train_anno[3], train_anno[0]:train_anno[0]+train_anno[2]]
-        # # To estimation the possible depth value for target
-        num_bins = 4
-        dp_values = np.array(box_depths, dtype=np.float32).flatten()
-        dp_values.sort()
-        hist, bin_edges = np.histogram(dp_values, bins=num_bins)
-        hist = list(hist)
-        possible_target_depthIdx = hist.index(np.max(hist))
-        bin_lower = bin_edges[possible_target_depthIdx]
-        bin_upper = bin_edges[possible_target_depthIdx+1]
-        depth_in_bin = dp_values[dp_values>=bin_lower]
-        depth_in_bin = depth_in_bin[depth_in_bin<=bin_upper]
-        possible_target_depth = np.mean(depth_in_bin) + 0.1 # to avoid the zeros
-        print('possible_target_depth : ', possible_target_depth)
-        max_depth = np.max(train_depths.flatten())
-        print('max depth in search area : ', max_depth)
-        #
-        # # to obtain the Gaussian probability map
-        sigma = (bin_upper - bin_lower + 1) / 3.0
-        # print('sigma = ', sigma)
-        # prob_map = scipy.stats.norm(possible_target_depth, sigma).pdf(dp_crop_padded)
-        prob_map = gaussian_prob(train_depths, possible_target_depth, sigma)
+        prob_map, candidate_depth = candidate_depth_from_histogram(train_depths, train_anno)
         #
         ''' Song : 2)  to mask the img_crop_padded using the prob_map
 
-            Method #1 : if probability < threshold (0.5), then drop the pixel => (0, 0, 0)
+            Method #1 : if probability < threshold (0.5), then drop the pixel => (0, 0, 0), hard mask
 
-            Method #2 : ?? blur or 
+            Method #2 : ?? blur or
         '''
+        prob_threshold = 0.2
+        depth_mask = prob_map > prob_threshold
+        depth_mask = depth_mask.astype(int)
 
-
-
-        ''' Example Plot '''
-        print(s)
-        fig, (ax1, ax2, ax3) = plt.subplots(1,3)
         rgb = data['train_images'][0].numpy() # (3, 288, 288)
         rgb = np.transpose(rgb, (1, 2, 0))    # (288, 288, 3) normalized rgb image
-        # new_image_blue, new_image_green, new_image_red = rgb
-        # rgb = np.dstack([new_image_red, new_image_green, new_image_blue])
-        ax1.imshow(rgb)
-        rect = data['train_anno'][0].numpy()
-        rect = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
-        ax1.add_patch(rect)
-        dp_colormap = data['train_depths'][0]
-        dp_colormap = cv.normalize(dp_colormap, None, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8UC1)
-        dp_colormap = cv.applyColorMap(dp_colormap, cv.COLORMAP_JET)
-        ax2.imshow(dp_colormap)
-        ax3.imshow(prob_map)
-        plt.show()
-        # plt.pause(5)
-        plt.close()
+        rgb[depth_mask==0] = 0                # masking
+        rgb = np.transpose(rgb, (2, 0, 1))    # (3, 288, 288)
+        data['train_images'][0] = torch.from_numpy(rgb)
+
+        # plot_prob_map()
 
         # Prepare output
         if self.mode == 'sequence':
