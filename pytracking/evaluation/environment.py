@@ -25,6 +25,7 @@ class EnvSettings:
         self.got_reports_path = ''
         self.tn_packed_results_path = ''
 
+        self.cdtb_path = '/home/yan/Projects/RGBD-benchmarks/CDTB/'
 
 def create_default_local_file():
     comment = {'results_path': 'Where to store tracking results',

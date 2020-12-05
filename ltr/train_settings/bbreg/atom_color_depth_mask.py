@@ -50,6 +50,8 @@ def run(settings):
 
     '''
         Song : depth mask, only change the inputs, using depth images to mask the RGB crops in ATOMProcessing_depth_mask !!!!!!
+
+        We replace the input RGB images 
     '''
     data_processing_train = processing.ATOMProcessing_depth_mask(search_area_factor=settings.search_area_factor,
                                                                  output_sz=settings.output_sz,
@@ -91,11 +93,11 @@ def run(settings):
                            shuffle=False, drop_last=True, epoch_interval=5, stack_dim=1)
 
     # Create network and actor
-    # net = atom_models.atom_resnet18(backbone_pretrained=True)
-    net = atom_models.atom_resnet18_depth_mask(backbone_pretrained=True)
+    net = atom_models.atom_resnet18(backbone_pretrained=True)
+    # net = atom_models.atom_resnet18_depth_mask(backbone_pretrained=True)
     objective = nn.MSELoss()
-    # actor = actors.AtomActor(net=net, objective=objective)
-    actor = actors.AtomActor_depth_mask(net=net, objective=objective)
+    actor = actors.AtomActor(net=net, objective=objective)
+    # actor = actors.AtomActor_depth_mask(net=net, objective=objective)
 
     # Optimizer
     optimizer = optim.Adam(actor.net.bb_regressor.parameters(), lr=1e-3)

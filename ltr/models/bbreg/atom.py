@@ -92,6 +92,9 @@ class ATOMnet_depth_mask(nn.Module):
         '''
         Song : one way here , to mask the images with depth here
         how to mask the test images? with different proposals ? or different clutters ???
+
+         1) masking the rgb images using depth here, before extract_backbone_features
+         2) in the loader.py,
         '''
         # Extract backbone features
         train_feat = self.extract_backbone_features(train_imgs.reshape(-1, *train_imgs.shape[-3:]))
@@ -128,18 +131,18 @@ def atom_resnet18(iou_input_dim=(256,256), iou_inter_dim=(256,256), backbone_pre
 
     return net
 
-@model_constructor
-def atom_resnet18_depth_mask(iou_input_dim=(256,256), iou_inter_dim=(256,256), backbone_pretrained=True):
-    # backbone
-    backbone_net = backbones.resnet18(pretrained=backbone_pretrained)
-
-    # Bounding box regressor
-    iou_predictor = bbmodels.AtomIoUNet(pred_input_dim=iou_input_dim, pred_inter_dim=iou_inter_dim)
-
-    net = ATOMnet_depth_mask(feature_extractor=backbone_net, bb_regressor=iou_predictor, bb_regressor_layer=['layer2', 'layer3'],
-                  extractor_grad=False)
-
-    return net
+# @model_constructor
+# def atom_resnet18_depth_mask(iou_input_dim=(256,256), iou_inter_dim=(256,256), backbone_pretrained=True):
+#     # backbone
+#     backbone_net = backbones.resnet18(pretrained=backbone_pretrained)
+#
+#     # Bounding box regressor
+#     iou_predictor = bbmodels.AtomIoUNet(pred_input_dim=iou_input_dim, pred_inter_dim=iou_inter_dim)
+#
+#     net = ATOMnet_depth_mask(feature_extractor=backbone_net, bb_regressor=iou_predictor, bb_regressor_layer=['layer2', 'layer3'],
+#                   extractor_grad=False)
+#
+#     return net
 
 
 @model_constructor

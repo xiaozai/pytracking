@@ -7,16 +7,7 @@ from .bounding_box_utils import rect_to_rel, rel_to_rect
 import scipy.stats
 
 import math
-
-def gaussian_prob(x, mu, std):
-    '''
-    Song : the depth value closer to the mu (center depth value) obtains the largest weights
-    '''
-    var = float(std)**2
-    denom = (2*math.pi*var)**.5
-    num = np.exp(-(x-float(mu))**2/(2*var))
-    # return num/denom
-    return num
+import numpy as np
 
 def sample_target(im, target_bb, search_area_factor, output_sz=None, mask=None):
     """ Extracts a square crop centered at target_bb box, of area search_area_factor^2 times target_bb area
@@ -116,23 +107,21 @@ def sample_target_depth_mask(im, dp, target_bb, search_area_factor, output_sz=No
     # Crop target
     im_crop = im[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad, :]
 
-    # im is grayscale image already, [gray, gray, gray], so it should be H*W*3
-    print('song in processing_utils.;py im_crop.shape', im_crop.shape)
-
     if mask is not None:
         mask_crop = mask[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad]
 
+    dp = torch.from_numpy(np.array(dp, dtype=np.float32))
+    # dp = np.array(dp, dtype=np.float32) # from uint16 to ??
     dp_crop = dp[y1 + y1_pad:y2 - y2_pad, x1 + x1_pad:x2 - x2_pad]
-    print('song in processing_utils.;py dp_crop.shape', dp_crop.shape)
+
     # Pad
     im_crop_padded = cv.copyMakeBorder(im_crop, y1_pad, y2_pad, x1_pad, x2_pad, cv.BORDER_REPLICATE)
-    print('song in processing_utils.;py im_crop_padded.shape', im_crop_padded.shape)
+
     if mask is not None:
         mask_crop_padded = F.pad(mask_crop, pad=(x1_pad, x2_pad, y1_pad, y2_pad), mode='constant', value=0)
 
     dp_crop_padded = F.pad(dp_crop, pad=(x1_pad, x2_pad, y1_pad, y2_pad), mode='constant', value=0)
-
-    print('song in processing_utils.;py dp_crop_padded.shape', dp_crop_padded.shape)
+    # dp_crop_padded = cv.copyMakeBorder(dp_crop, y1_pad, y2_pad, x1_pad, x2_pad, cv.BORDER_REPLICATE)
 
     '''
         convert dp to depth-based Gaussian Probability map
@@ -146,42 +135,22 @@ def sample_target_depth_mask(im, dp, target_bb, search_area_factor, output_sz=No
         further , we should use the attention here for find the possible target depth values
     '''
 
-    # # To estimation the possible depth value for target
-    # num_bins = 3
-    # dp_values = np.array(dp, dtype=np.float32).flatten()
-    # dp_values.sort()
-    # hist, bin_edges = np.histogram(dp_values, bins=num_bins)
-    # hist = list(hist)
-    # possible_target_depthIdx = hist.index(np.max(hist))
-    # bin_lower = bin_edges[possible_target_depthIdx]
-    # bin_upper = bin_edges[possible_target_depthIdx+1]
-    # depth_in_bin = dp_values[dp_values>=bin_lower]
-    # depth_in_bin = depth_in_binp[depth_in_bin<=bin_upper]
-    # possible_target_depth = np.mean(depth_in_bin) + 0.1 # to avoid the zeros
-    #
-    # # to obtain the Gaussian probability map
-    # sigma = bin_upper - bin_lower + 1
-    # # prob_map = scipy.stats.norm(possible_target_depth, sigma).pdf(dp_crop_padded)
-    # prob_map = gaussian_prob(dp_crop_padded, possible_target_depth, sigma)
-    #
-    # # mask the img_crop_padded using the prob_map ???
-
     if output_sz is not None:
         resize_factor = output_sz / crop_sz
         im_crop_padded = cv.resize(im_crop_padded, (output_sz, output_sz))
         dp_crop_padded = F.interpolate(dp_crop_padded[None, None], (output_sz, output_sz), mode='bilinear', align_corners=False)[0, 0]
 
         if mask is None:
-            return im_crop_padded, dp_crop_padded, resize_factor
+            return im_crop_padded, dp_crop_padded.numpy(), resize_factor
         mask_crop_padded = \
         F.interpolate(mask_crop_padded[None, None], (output_sz, output_sz), mode='bilinear', align_corners=False)[0, 0]
 
-        return im_crop_padded, dp_crop_padded, resize_factor, mask_crop_padded
+        return im_crop_padded, dp_crop_padded.numpy(), resize_factor, mask_crop_padded
 
     else:
         if mask is None:
-            return im_crop_padded, dp_crop_padded, 1.0
-        return im_crop_padded, dp_crop_padded, 1.0, mask_crop_padded
+            return im_crop_padded, dp_crop_padded.numpy(), 1.0
+        return im_crop_padded, dp_crop_padded.numpy(), 1.0, mask_crop_padded
 
 
 def transform_image_to_crop(box_in: torch.Tensor, box_extract: torch.Tensor, resize_factor: float,

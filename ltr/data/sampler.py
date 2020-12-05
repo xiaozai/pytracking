@@ -159,8 +159,7 @@ class TrackingSampler(torch.utils.data.Dataset):
             test_frame_ids = [1] * self.num_test_frames
 
         if self.use_depth:
-            # Added by Song : for rgb + depth
-            print('Song in ltr.data.sampler.py, TrackingSampler, we return depths as well!!!')
+            ''' Added by Song : for rgb + depth '''
             train_frames, train_depths, train_anno, meta_obj_train = dataset.get_frames(seq_id, train_frame_ids, seq_info_dict)
             test_frames, test_depths, test_anno, meta_obj_test = dataset.get_frames(seq_id, test_frame_ids, seq_info_dict)
 

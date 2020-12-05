@@ -101,6 +101,9 @@ class CDTB_color_depth_mask(BaseVideoDataset):
         return torch.tensor(gt)
 
     def _read_target_visible(self, seq_path):
+        '''
+        Song : the target is not visible when it is full-occlusion or out-of-frame in CDTB
+        '''
         # Read full occlusion and out_of_view
         occlusion_file = os.path.join(seq_path, "full-occlusion.tag")
         out_of_view_file = os.path.join(seq_path, "out-of-frame.tag")
