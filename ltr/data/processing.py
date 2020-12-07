@@ -20,6 +20,21 @@ def gaussian_prob(x, mu, std):
     # return num/denom
     return num
 
+def proposals_candidate_depth_from_histogram(depth_img, boxes, num_bins=8):
+    '''
+    Song : multiple proposal boxes
+        use the element-wise maximum operation on the prob_maps for each box ???
+    '''
+
+    prob_map = np.zeros_like(depth_img, dtype=np.float32)
+
+    for box in boxes:
+        # print(box)
+        temp_prob_map, _ = candidate_depth_from_histogram(depth_img, box, num_bins=num_bins)
+        prob_map = np.maximum(prob_map, temp_prob_map)
+
+    return prob_map
+
 def candidate_depth_from_histogram(depth_img, box, num_bins=8):
     '''
     Song : to select the candidate depth and the corresponding depth-based probability map
@@ -35,6 +50,7 @@ def candidate_depth_from_histogram(depth_img, box, num_bins=8):
     '''
 
     # 1) crop the depth area
+    # print(box)
     box_depths = depth_img[box[1]:box[1]+box[3], box[0]:box[0]+box[2]]
     center_depth = depth_img[int((box[1]+box[3])/2.0), int((box[0]+box[2])/2.0)]
 
@@ -43,7 +59,13 @@ def candidate_depth_from_histogram(depth_img, box, num_bins=8):
     # print(dp_values)
 
     max_depth_img = np.max(depth_img.flatten())
-    max_depth_box = dp_values[-1]
+    if len(dp_values) > 0:
+        max_depth_box = dp_values[-1]
+    else:
+        prob_map = np.ones_like(depth_img, dtype=np.float32)
+        candidate_depth = 0
+        return prob_map, candidate_depth
+
 
     # 2) perform the historgram to count the frequency of the depth values
     hist, bin_edges = np.histogram(dp_values, bins=num_bins)
@@ -93,52 +115,52 @@ def candidate_depth_from_histogram(depth_img, box, num_bins=8):
 
     return prob_map, candidate_depth
 
-# def plot_prob_map():
-    # ''' Example Plot '''
-    # print(s)
-    # fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2)
-    # rgb = data['train_images'][0].numpy() # (3, 288, 288)
-    # rgb = np.transpose(rgb, (1, 2, 0))    # (288, 288, 3) normalized rgb image
-    # # new_image_blue, new_image_green, new_image_red = rgb
-    # # rgb = np.dstack([new_image_red, new_image_green, new_image_blue])
-    # ax1.imshow(rgb)
-    # rect = data['train_anno'][0].numpy()
-    # rect1 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
-    # ax1.add_patch(rect1)
-    # dp_colormap = data['train_depths'][0]
-    # dp_colormap = cv.normalize(dp_colormap, None, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8UC1)
-    # dp_colormap = cv.applyColorMap(dp_colormap, cv.COLORMAP_JET)
-    #
-    # ax2.imshow(dp_colormap)
-    # rect2 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
-    # ax2.add_patch(rect2)
-    #
-    #
-    # rgb_copy = data['train_images_copy'][0]
-    # ax3.imshow(rgb_copy)
-    # rect3 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
-    # ax3.add_patch(rect3)
-    #
-    # ax4.imshow(prob_map)
-    # rect4 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
-    # ax4.add_patch(rect4)
-    #
-    #
-    # masked_rgb_copy = rgb_copy
-    # masked_rgb_copy[depth_mask==0] = 0
-    # ax5.imshow(masked_rgb_copy)
-    # rect5 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
-    # ax5.add_patch(rect5)
-    #
-    # masked_rgb = rgb
-    # masked_rgb[depth_mask==0] = 0
-    # ax6.imshow(masked_rgb)
-    # rect6 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
-    # ax6.add_patch(rect6)
-    #
-    # plt.show()
-    # # plt.pause(5)
-    # plt.close()
+def plot_prob_map(s, data, depth_mask, prob_map):
+    ''' Example Plot '''
+    print(s)
+    fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2)
+    rgb = data[s + '_images'][0].numpy() # (3, 288, 288)
+    rgb = np.transpose(rgb, (1, 2, 0))    # (288, 288, 3) normalized rgb image
+    # new_image_blue, new_image_green, new_image_red = rgb
+    # rgb = np.dstack([new_image_red, new_image_green, new_image_blue])
+    ax1.imshow(rgb)
+    rect = data[s + '_anno'][0].numpy()
+    rect1 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    ax1.add_patch(rect1)
+    dp_colormap = data[s + '_depths'][0]
+    dp_colormap = cv.normalize(dp_colormap, None, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8UC1)
+    dp_colormap = cv.applyColorMap(dp_colormap, cv.COLORMAP_JET)
+
+    ax2.imshow(dp_colormap)
+    rect2 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    ax2.add_patch(rect2)
+
+
+    rgb_copy = data[s + '_images_copy'][0]
+    ax3.imshow(rgb_copy)
+    rect3 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    ax3.add_patch(rect3)
+
+    ax4.imshow(prob_map)
+    rect4 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    ax4.add_patch(rect4)
+
+
+    masked_rgb_copy = rgb_copy
+    masked_rgb_copy[depth_mask==0] = 0
+    ax5.imshow(masked_rgb_copy)
+    rect5 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    ax5.add_patch(rect5)
+
+    masked_rgb = rgb
+    masked_rgb[depth_mask==0] = 0
+    ax6.imshow(masked_rgb)
+    rect6 = patches.Rectangle((rect[0],rect[1]),rect[2],rect[3],linewidth=1,edgecolor='r',facecolor='none')
+    ax6.add_patch(rect6)
+
+    plt.show()
+    # plt.pause(5)
+    plt.close()
 
 def stack_tensors(x):
     if isinstance(x, (list, tuple)) and isinstance(x[0], torch.Tensor):
@@ -440,6 +462,23 @@ class ATOMProcessing_depth_mask(BaseProcessing):
 
         # plot_prob_map()
 
+        test_depths = data['test_depths'][0]
+        test_proposals = data['test_proposals'][0].numpy().astype(int)
+        # print('test_proposals : ')
+        # print(test_proposals)
+        prob_map = proposals_candidate_depth_from_histogram(test_depths, test_proposals)
+
+        depth_mask = prob_map > prob_threshold
+        depth_mask = depth_mask.astype(int)
+
+        rgb = data['test_images'][0].numpy()
+        rgb = np.transpose(rgb, (1, 2, 0))    # (288, 288, 3) normalized rgb image
+        rgb[depth_mask==0] = 0                # masking
+        rgb = np.transpose(rgb, (2, 0, 1))    # (3, 288, 288)
+        data['test_images'][0] = torch.from_numpy(rgb)
+
+        # plot_prob_map('test', data, depth_mask, prob_map)
+        
         # Prepare output
         if self.mode == 'sequence':
             data = data.apply(stack_tensors)
