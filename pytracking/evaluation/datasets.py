@@ -16,6 +16,7 @@ dataset_dict = dict(
     # CDTB , only RGB images
     cdtb_color=DatasetInfo(module=pt % "cdtb_color", class_name="CDTBColorDataset", kwargs=dict()),
     cdtb_color_val=DatasetInfo(module=pt % "cdtb_color_val", class_name="CDTBColorValDataset", kwargs=dict()),
+    cdtb_color_depth_mask_val=DatasetInfo(module=pt % "cdtb_color_depth_mask_val", class_name="CDTBColorDepthMaskValDataset", kwargs=dict()),
     # CDTB, only Depth images
     cdtb_depth=DatasetInfo(module=pt % "cdtb_depth", class_name="CDTBDepthDataset", kwargs=dict()),
     cdtb_depth_val=DatasetInfo(module=pt % "cdtb_depth_val", class_name="CDTBDepthValDataset", kwargs=dict()),

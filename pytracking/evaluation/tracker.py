@@ -16,6 +16,9 @@ from pathlib import Path
 import torch
 
 
+import numpy as np
+import math
+
 _tracker_disp_colors = {1: (0, 255, 0), 2: (0, 0, 255), 3: (255, 0, 0),
                         4: (255, 255, 255), 5: (0, 0, 0), 6: (0, 255, 128),
                         7: (123, 123, 123), 8: (255, 128, 0), 9: (128, 0, 255)}
@@ -175,21 +178,30 @@ class Tracker:
                 val = tracker_out.get(key, defaults.get(key, None))
                 if key in tracker_out or val is not None:
                     output[key].append(val)
-
+        '''
+            Song :
+                read depth images as the [depth, depth, depth] in (0, 255)
+        '''
         # Initialize
         # image = self._read_image(seq.frames[0])
-        ''' Song : read the depth or color images '''
-        image = self._read_image(seq.frames[0], is_depth=init_info.get('init_is_depth'), depth_threshold=init_info.get('init_depth_threshold'))
-        # if init_info.get('init_use_rgbd'):
-        #     depth = self._read_image(seq.depth_frames[0], is_depth=True, depth_threshold=init_info.get('init_depth_threshold'))
+        image = self._read_image(seq.frames[0],
+                                 is_depth=init_info.get('init_is_depth'),
+                                 depth_threshold=init_info.get('init_depth_threshold'))
+
+        ''' Song :
+            1) using depth to mask rgb images for the template branch ...
+        '''
+        if seq.depth_frames:
+            depth = self._read_depth(seq.depth_frames[0])
+            bbox = init_info.get('init_bbox')
+            image = self._mask_rgb_using_depth(image, depth, bbox)
 
         if tracker.params.visualization and self.visdom is None:
             self.visualize(image, init_info.get('init_bbox')) # Song !!!!
 
         start_time = time.time()
         out = tracker.initialize(image, init_info)
-        # if use_rgbd:
-        #   out = tracker.initialize(image, depth, init_info) # Song!!!! for RGB+D trackers
+
         if out is None:
             out = {}
 
@@ -214,10 +226,15 @@ class Tracker:
                     time.sleep(0.1)
 
             # image = self._read_image(frame_path)
-            ''' Song '''
-            image = self._read_image(frame_path, is_depth=init_info.get('init_is_depth'), depth_threshold=init_info.get('init_depth_threshold')) # Song !!!!!
-            # if use_rgbd:
-            #     depth = self._read_image(depth_frame_path, is_depth=True, depth_threshold=init_info.get('init_depth_threshold'))
+            ''' Song : sometimes we use the [depth, depth, depth] as the inputs '''
+            image = self._read_image(frame_path,
+                                     is_depth=init_info.get('init_is_depth'),
+                                     depth_threshold=init_info.get('init_depth_threshold'))
+            ''' Song ; mask the rgb using depth for testing branch ????'''
+            # if seq.depth_frames:
+            #     depth = self._read_depth(seq.depth_frames[frame_num])
+            #     bbox = init_infor.get('init_bbox')
+            #     image = self._mask_rgb_using_depth(image, depth, bbox)
 
             start_time = time.time()
 
@@ -226,7 +243,6 @@ class Tracker:
 
             out = tracker.track(image, info)
 
-            # out = tracker.track(image, depth, info) # Song , for RGB+D trackers
             prev_output = OrderedDict(out)
             _store_outputs(out, {'time': time.time() - start_time})
 
@@ -741,3 +757,91 @@ class Tracker:
             '''
             im = cv.imread(image_file)
             return cv.cvtColor(im, cv.COLOR_BGR2RGB)
+
+    def _read_depth(self, image_file: str):
+        '''
+        Song : to read the depth images, keep all values
+        '''
+        dp = cv.imread(image_file, -1)
+        return dp
+
+    def _mask_rgb_using_depth(self, color, depth, box, num_bins=8):
+        '''
+        Song : assume that bbox is (x, y, w, h)
+               color and depth has the same shape
+
+        '''
+        # print(box)
+        box = [int(b) for b in box]
+        box_depths = depth[box[1]:box[1]+box[3], box[0]:box[0]+box[2]]
+        center_depth = depth[int((box[1]+box[3])/2.0), int((box[0]+box[2])/2.0)]
+
+        dp_values = np.array(box_depths, dtype=np.float32).flatten()
+        dp_values.sort()
+
+        max_depth_img = np.max(depth.flatten())
+        max_depth_box = dp_values[-1]
+
+        # 2) perform the historgram to count the frequency of the depth values
+        hist, bin_edges = np.histogram(dp_values, bins=num_bins)
+        hist = list(hist)
+
+        # 3) select the candidate depth
+        candidate_idx = hist.index(np.max(hist))
+        bin_lower = bin_edges[candidate_idx]
+        bin_upper = bin_edges[candidate_idx+1]
+
+        if bin_upper == max_depth_img:
+            '''
+            We assume that the largest depth belongs to the background
+
+            if not the largest depth in the search region ,
+                we choose the top 1 as the candidate depth for target
+                and use the mean value of bin
+            else
+                choose the 2nd as the candidate
+            '''
+            sorted_hist = hist
+            sorted_hist.sort()
+
+            candiate_idx = hist.index(sorted_hist[-2]) # 2nd largest
+            bin_lower = bin_edges[candidate_idx]
+            bin_upper = bin_edges[candidate_idx+1]
+
+        depth_in_bin = dp_values[dp_values>=bin_lower]
+        depth_in_bin = depth_in_bin[depth_in_bin<=bin_upper]
+        candidate_depth = np.mean(depth_in_bin) + 0.1 # to avoid the zeros
+
+        # if bin_upper == max_depth_box:
+        #     '''
+        #     Sometimes the largest depth in the box is also the background
+        #     check if the candidate depth is same as the center one
+        #
+        #     usually we assume that the target should locates in the center of the box
+        #
+        #     hard-programming ????
+        #     '''
+        #     if abs(bin_upper - center_depth) > 1000:
+        #         candidate_depth = center_depth
+
+        # 4) obtain the depth-based Gaussian probability map
+        sigma = (bin_upper - bin_lower + 1) / 2.0
+        prob_map = self.gaussian_prob(depth, candidate_depth, sigma)
+
+        # Mask
+        prob_threshold = 0.2
+        depth_mask = prob_map > prob_threshold
+        depth_mask = depth_mask.astype(int)
+        color[depth_mask==0] = 0
+
+        return color
+
+    def gaussian_prob(self, x, mu, std):
+        '''
+        Song : the depth value closer to the mu (center depth value) obtains the largest weights
+        '''
+        var = float(std)**2
+        denom = (2*math.pi*var)**.5
+        num = np.exp(-(x-float(mu))**2/(2*var))
+        # return num/denom
+        return num

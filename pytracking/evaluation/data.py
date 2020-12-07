@@ -94,7 +94,8 @@ class Sequence:
         # Song : !!!!
         init_data[0]['is_depth'] = self.is_depth
         init_data[0]['depth_threshold'] = self.depth_threshold
-        init_data[0]['use_rgbd'] = self.depth_frames is not None
+        init_data[0]['depth_frames'] = self.depth_frames is not None
+
 
         return init_data
 

@@ -11,7 +11,7 @@ def torch_to_numpy(a: torch.Tensor):
     return a.squeeze(0).permute(1,2,0).numpy()
 
 
-def sample_patch_transformed(im, pos, scale, image_sz, transforms, is_mask=False):
+def sample_patch_transformed(im, pos, scale, image_sz, transforms, is_mask=False, is_deph=False):
     """Extract transformed image samples.
     args:
         im: Image.
@@ -22,7 +22,7 @@ def sample_patch_transformed(im, pos, scale, image_sz, transforms, is_mask=False
     """
 
     # Get image patche
-    im_patch, _ = sample_patch(im, pos, scale*image_sz, image_sz, is_mask=is_mask)
+    im_patch, _ = sample_patch(im, pos, scale*image_sz, image_sz, is_mask=is_mask, is_depth=is_depth)
 
     # Apply transforms
     im_patches = torch.cat([T(im_patch, is_mask=is_mask) for T in transforms])
@@ -53,7 +53,7 @@ def sample_patch_multiscale(im, pos, scales, image_sz, mode: str='replicate', ma
 
 
 def sample_patch(im: torch.Tensor, pos: torch.Tensor, sample_sz: torch.Tensor, output_sz: torch.Tensor = None,
-                 mode: str = 'replicate', max_scale_change=None, is_mask=False):
+                 mode: str = 'replicate', max_scale_change=None, is_mask=False, is_depth=False):
     """Sample an image patch.
 
     args:
