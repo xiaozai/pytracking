@@ -230,6 +230,9 @@ class Tracker:
             image = self._read_image(frame_path,
                                      is_depth=init_info.get('init_is_depth'),
                                      depth_threshold=init_info.get('init_depth_threshold'))
+
+            depth = self._read_depth(seq.depth_frames[frame_num])
+
             ''' Song ; mask the rgb using depth for testing branch ????'''
             # if seq.depth_frames:
             #     depth = self._read_depth(seq.depth_frames[frame_num])
@@ -241,6 +244,8 @@ class Tracker:
             info = seq.frame_info(frame_num)
             info['previous_output'] = prev_output
 
+            info['depth'] = depth
+            
             out = tracker.track(image, info)
 
             prev_output = OrderedDict(out)

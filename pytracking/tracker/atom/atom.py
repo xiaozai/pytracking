@@ -12,6 +12,7 @@ from .optim import ConvProblem, FactorizedConvProblem
 from pytracking.features import augmentation
 import ltr.data.bounding_box_utils as bbutils
 
+import numpy as np
 
 class ATOM(BaseTracker):
 
@@ -231,13 +232,21 @@ class ATOM(BaseTracker):
         # Convert image
         im = numpy_to_torch(image)
         self.im = im    # For debugging only
-
+        '''
+        Song : add depth for as
+        '''
+        if 'depth' in info.keys():
+            depth = info['depth']
+            depth = torch.from_numpy(np.asarray(depth, dtype=np.float32)).float()
+        else:
+            depth = None
         # ------- LOCALIZATION ------- #
 
         # Get sample
         sample_pos = self.pos.round()
         sample_scales = self.target_scale * self.params.scale_factors
-        test_x = self.extract_processed_sample(im, self.pos, sample_scales, self.img_sample_sz)
+        # test_x = self.extract_processed_sample(im, self.pos, sample_scales, self.img_sample_sz)
+        test_x = self.extract_processed_sample_with_depth(im, depth, self.pos, sample_scales, self.img_sample_sz)
 
         # Compute scores
         scores_raw = self.apply_filter(test_x)
@@ -410,6 +419,9 @@ class ATOM(BaseTracker):
     def extract_sample(self, im: torch.Tensor, pos: torch.Tensor, scales, sz: torch.Tensor):
         return self.params.features.extract(im, pos, scales, sz)[0]
 
+    def extract_sample_with_depth(self, im: torch.Tensor, depth: torch.Tensor, pos: torch.Tensor, scales, sz: torch.Tensor):
+        return self.params.features.extract_with_depth(im, depth, pos, scales, sz)[0]
+
     def get_iou_features(self):
         return self.params.features.get_unique_attribute('iounet_features')
 
@@ -418,6 +430,10 @@ class ATOM(BaseTracker):
 
     def extract_processed_sample(self, im: torch.Tensor, pos: torch.Tensor, scales, sz: torch.Tensor) -> (TensorList, TensorList):
         x = self.extract_sample(im, pos, scales, sz)
+        return self.preprocess_sample(self.project_sample(x))
+
+    def extract_processed_sample_with_depth(self, im: torch.Tensor, depth: torch.Tensor, pos: torch.Tensor, scales, sz: torch.Tensor) -> (TensorList, TensorList):
+        x = self.extract_sample_with_depth(im, depth, pos, scales, sz)
         return self.preprocess_sample(self.project_sample(x))
 
     def preprocess_sample(self, x: TensorList) -> (TensorList, TensorList):
