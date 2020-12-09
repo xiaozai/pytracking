@@ -329,7 +329,7 @@ class ATOM(BaseTracker):
         new_state = torch.cat((self.pos[[1,0]] - (self.target_sz[[1,0]]-1)/2, self.target_sz[[1,0]]))
 
         # out = {'target_bbox': new_state.tolist()}
-        out = {'target_bbox': new_state.tolist(), 'confidence': max_score} # Song !!!!, as the confidence
+        out = {'target_bbox': new_state.tolist(), 'confidence': max_score, 'score_map': s.clone().cpu().numpy().squeeze()} # Song !!!!, as the confidence
         return out
 
 

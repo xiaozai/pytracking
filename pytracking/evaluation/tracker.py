@@ -58,9 +58,11 @@ class Tracker:
         if self.run_id is None:
             self.results_dir = '{}/{}/{}'.format(env.results_path, self.name, self.parameter_name)
             self.segmentation_dir = '{}/{}/{}'.format(env.segmentation_path, self.name, self.parameter_name)
+            self.scoremap_dir = '{}/{}/{}'.format(env.scoremap_path, self.name, self.parameter_name)
         else:
             self.results_dir = '{}/{}/{}_{:03d}'.format(env.results_path, self.name, self.parameter_name, self.run_id)
             self.segmentation_dir = '{}/{}/{}_{:03d}'.format(env.segmentation_path, self.name, self.parameter_name, self.run_id)
+            self.scoremap_dir = '{}/{}/{}_{:03d}'.format(env.scoremap_path, self.name, self.parameter_name, self.run_id)
 
         tracker_module_abspath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'tracker', self.name))
         if os.path.isdir(tracker_module_abspath):
@@ -184,7 +186,8 @@ class Tracker:
         output = {'target_bbox': [],
                   'time': [],
                   'segmentation': [],
-                  'confidence' : []} # Song !!!!
+                  'confidence' : [],    # Song !!!!
+                  'score_map': []}      # Song !!!!
 
         def _store_outputs(tracker_out: dict, defaults=None):
             defaults = {} if defaults is None else defaults
@@ -227,7 +230,8 @@ class Tracker:
         init_default = {'target_bbox': init_info.get('init_bbox'),
                         'time': time.time() - start_time,
                         'segmentation': init_info.get('init_mask'),
-                        'confidence' : 1.0}
+                        'confidence' : 1.0,
+                        'score_map': np.zeros((224,224), dtype=float)}
 
         _store_outputs(out, init_default)
 
@@ -249,8 +253,10 @@ class Tracker:
             image = self._read_image(frame_path,
                                      is_depth=init_info.get('init_is_depth'),
                                      depth_threshold=init_info.get('init_depth_threshold'))
-
-            depth = self._read_depth(seq.depth_frames[frame_num]) # Song
+            if seq.depth_frames:
+                depth = self._read_depth(seq.depth_frames[frame_num]) # Song
+            else:
+                depth = None
 
             start_time = time.time()
 
@@ -271,7 +277,7 @@ class Tracker:
             elif tracker.params.visualization:
                 self.visualize(image, out['target_bbox'], segmentation) # Song !!!!
 
-        for key in ['target_bbox', 'segmentation', 'confidence']:
+        for key in ['target_bbox', 'segmentation', 'confidence', 'score_map']:
             if key in output and len(output[key]) <= 1:
                 output.pop(key)
 
