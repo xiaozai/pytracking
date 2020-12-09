@@ -115,9 +115,10 @@ def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
                 # print(frame_score.shape)
                 # frame_score = cv2.applyColorMap(np.asarray(frame_score*255, dtype=np.uint8), cv2.COLORMAP_JET)
                 # cv2.imwrite(os.path.join(scoremap_path, '{}.png'.format(frame_name)), frame_score)
-                
+
                 plt.imshow(frame_score)
                 plt.savefig(os.path.join(scoremap_path, '{}.png'.format(frame_name)))
+                plt.close()
 
 def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None):
     """Runs a tracker on a sequence."""
