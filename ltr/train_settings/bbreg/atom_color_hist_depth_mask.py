@@ -1,6 +1,6 @@
 import torch.nn as nn
 import torch.optim as optim
-from ltr.dataset import Lasot, TrackingNet, MSCOCOSeq, Got10k, CDTB_color_depth_mask
+from ltr.dataset import Lasot, TrackingNet, MSCOCOSeq, Got10k, CDTB_color_depth
 from ltr.data import processing, sampler, LTRLoader
 import ltr.models.bbreg.atom as atom_models
 from ltr import actors
@@ -27,12 +27,11 @@ def run(settings):
     # got10k_train = Got10k(settings.env.got10k_dir, split='vottrain')
     # trackingnet_train = TrackingNet(settings.env.trackingnet_dir, set_ids=list(range(4)))
     # coco_train = MSCOCOSeq(settings.env.coco_dir)
-
-    cdtb_train = CDTB_color_depth_mask(settings.env.cdtb_dir, split='train')
+    cdtb_train = CDTB_color_depth(settings.env.cdtb_dir, split='train')
 
     # Validation datasets
     # got10k_val = Got10k(settings.env.got10k_dir, split='votval')
-    cdtb_val = CDTB_color_depth_mask(settings.env.cdtb_dir, split='val')
+    cdtb_val = CDTB_color_depth(settings.env.cdtb_dir, split='val')
 
     # The joint augmentation transform, that is applied to the pairs jointly
     transform_joint = tfm.Transform(tfm.ToGrayscale(probability=0.05))
@@ -51,9 +50,9 @@ def run(settings):
     '''
         Song : depth mask, only change the inputs, using depth images to mask the RGB crops in ATOMProcessing_depth_mask !!!!!!
 
-        We replace the input RGB images 
+        We replace the input RGB images
     '''
-    data_processing_train = processing.ATOMProcessing_depth_mask(search_area_factor=settings.search_area_factor,
+    data_processing_train = processing.ATOMProcessing_hist_depth_mask(search_area_factor=settings.search_area_factor,
                                                                  output_sz=settings.output_sz,
                                                                  center_jitter_factor=settings.center_jitter_factor,
                                                                  scale_jitter_factor=settings.scale_jitter_factor,
@@ -63,7 +62,7 @@ def run(settings):
                                                                  joint_transform=transform_joint)
 
     # Data processing to do on the validation pairs
-    data_processing_val = processing.ATOMProcessing_depth_mask(search_area_factor=settings.search_area_factor,
+    data_processing_val = processing.ATOMProcessing_hist_depth_mask(search_area_factor=settings.search_area_factor,
                                                                output_sz=settings.output_sz,
                                                                center_jitter_factor=settings.center_jitter_factor,
                                                                scale_jitter_factor=settings.scale_jitter_factor,

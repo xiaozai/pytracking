@@ -167,6 +167,20 @@ class Tracker:
         # object in frame i
         # segmentation[i] is the multi-label segmentation mask for frame i (numpy array)
 
+        ''' Song :
+                Inputs :
+                    - depth only  H*W*3 , e.g. [depth, depth, depth] normalized in (0, 255)
+                    - rgb only , H*W*3
+                    - colormap, H*W*3
+                    - rgb + depth, for this, the flag depth_usage is required
+
+                depth_usage:
+                    - default, nothing to do
+                    - hist_depth_mask, to select the candidate depth value and to perform the Gaussian probability operation
+                    - kmeans_depth_mask, not implemented yet
+                    - more ...
+        '''
+
         output = {'target_bbox': [],
                   'time': [],
                   'segmentation': [],
@@ -178,26 +192,29 @@ class Tracker:
                 val = tracker_out.get(key, defaults.get(key, None))
                 if key in tracker_out or val is not None:
                     output[key].append(val)
-        '''
-            Song :
-                read depth images as the [depth, depth, depth] in (0, 255)
-        '''
+
         # Initialize
         # image = self._read_image(seq.frames[0])
         image = self._read_image(seq.frames[0],
                                  is_depth=init_info.get('init_is_depth'),
                                  depth_threshold=init_info.get('init_depth_threshold'))
 
-        ''' Song :
-            1) using depth to mask rgb images for the template branch ...
+        ''' Song, use the depth !!!!!
+            - to initialize the Template branch (the first frame)
         '''
         if seq.depth_frames:
             depth = self._read_depth(seq.depth_frames[0])
             bbox = init_info.get('init_bbox')
-            image = self._mask_rgb_using_depth(image, depth, bbox)
+            depth_usage = init_info.get('init_depth_usage')
+            if depth_usage == 'hist_depth_mask':
+                image = self._hist_depth_mask(image, depth, bbox)
+            # elif depth_useage == 'default':
+            #     pass
+            # else:
+            #     pass
 
         if tracker.params.visualization and self.visdom is None:
-            self.visualize(image, init_info.get('init_bbox')) # Song !!!!
+            self.visualize(image, init_info.get('init_bbox'))
 
         start_time = time.time()
         out = tracker.initialize(image, init_info)
@@ -225,27 +242,24 @@ class Tracker:
                 else:
                     time.sleep(0.1)
 
+            ''' Song, use the depth !!!!!
+                - to process the following test images in tracker.track()
+            '''
             # image = self._read_image(frame_path)
-            ''' Song : sometimes we use the [depth, depth, depth] as the inputs '''
             image = self._read_image(frame_path,
                                      is_depth=init_info.get('init_is_depth'),
                                      depth_threshold=init_info.get('init_depth_threshold'))
 
-            depth = self._read_depth(seq.depth_frames[frame_num])
-
-            ''' Song ; mask the rgb using depth for testing branch ????'''
-            # if seq.depth_frames:
-            #     depth = self._read_depth(seq.depth_frames[frame_num])
-            #     bbox = init_infor.get('init_bbox')
-            #     image = self._mask_rgb_using_depth(image, depth, bbox)
+            depth = self._read_depth(seq.depth_frames[frame_num]) # Song
 
             start_time = time.time()
 
             info = seq.frame_info(frame_num)
             info['previous_output'] = prev_output
 
-            info['depth'] = depth
-            
+            info['depth'] = depth  # Song
+            info['depth_usage'] = init_info.get('init_depth_usage')  # Song
+
             out = tracker.track(image, info)
 
             prev_output = OrderedDict(out)
@@ -770,7 +784,7 @@ class Tracker:
         dp = cv.imread(image_file, -1)
         return dp
 
-    def _mask_rgb_using_depth(self, color, depth, box, num_bins=8):
+    def _hist_depth_mask(self, color, depth, box, num_bins=8):
         '''
         Song : assume that bbox is (x, y, w, h)
                color and depth has the same shape
@@ -848,5 +862,4 @@ class Tracker:
         var = float(std)**2
         denom = (2*math.pi*var)**.5
         num = np.exp(-(x-float(mu))**2/(2*var))
-        # return num/denom
         return num

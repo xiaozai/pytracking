@@ -16,4 +16,4 @@ from .synthetic_video_blend import SyntheticVideoBlend
 from .cdtb_dcolormap import CDTB_dcolormap
 from .cdtb_depth import CDTB_depth
 from .cdtb_color import CDTB_color
-from .cdtb_color_depth_mask import CDTB_color_depth_mask
+from .cdtb_color_depth import CDTB_color_depth

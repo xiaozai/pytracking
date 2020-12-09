@@ -1,5 +1,5 @@
 import torch
-from pytracking.features.preprocessing import sample_patch, sample_patch_with_depth
+from pytracking.features.preprocessing import sample_patch, sample_patch_hist_depth_mask
 from pytracking import TensorList
 
 class ExtractorBase:
@@ -121,7 +121,7 @@ class MultiResolutionExtractor(ExtractorBase):
         else:
             return feature_map, patch_coords
 
-    def extract_with_depth(self, im, depth, pos, scales, image_sz, return_patches=False):
+    def extract_hist_depth_mask(self, im, depth, pos, scales, image_sz, return_patches=False):
         """Extract features.
         args:
             im: Image.
@@ -133,7 +133,7 @@ class MultiResolutionExtractor(ExtractorBase):
             scales = [scales]
 
         # Get image patches
-        patch_iter, coord_iter = zip(*(sample_patch_with_depth(im, depth, pos, s*image_sz, image_sz, mode=self.patch_mode,
+        patch_iter, coord_iter = zip(*(sample_patch_hist_depth_mask(im, depth, pos, s*image_sz, image_sz, mode=self.patch_mode,
                                                     max_scale_change=self.max_scale_change) for s in scales))
         im_patches = torch.cat(list(patch_iter))
         patch_coords = torch.cat(list(coord_iter))

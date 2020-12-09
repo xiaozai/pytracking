@@ -28,7 +28,7 @@ class CDTB_color(BaseVideoDataset):
                         options can be used at the same time.
             data_fraction - Fraction of dataset to be used. The complete dataset is used by default
         """
-        root = env_settings().got10k_dir if root is None else root
+        root = env_settings().cdtb_dir if root is None else root
         super().__init__('CDTB_color', root, image_loader)
 
         # all folders inside the root

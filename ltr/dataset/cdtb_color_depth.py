@@ -11,16 +11,21 @@ from ltr.data.image_loader import jpeg4py_loader
 from ltr.admin.environment import env_settings
 import cv2
 
-class CDTB_color_depth_mask(BaseVideoDataset):
-    """ CDTB color images , masking by depth
+class CDTB_color_depth(BaseVideoDataset):
+    """ CDTB color images and depth images
+
+        Song : get_frames() return both the rgb images and depth images !!!!
     """
 
     def __init__(self, root=None, image_loader=jpeg4py_loader, split=None, seq_ids=None, data_fraction=None):
         """
         args:
-            root - path to the got-10k training data. Note: This should point to the 'train' folder inside GOT-10k
+            root - path to the CDTB training data. Note: This should point to the 'train' folder inside CDTB
             image_loader (jpeg4py_loader) -  The function to read the images. jpeg4py (https://github.com/ajkxyz/jpeg4py)
                                             is used by default.
+
+                                          - we use the cv2 to load the depth images, e.g. dp = cv2.imread(dp_path, -1)
+
             split - 'train' or 'val'. Note: The validation split here is a subset of the official got-10k train split,
                     not NOT the official got-10k validation split. To use the official validation split, provide that as
                     the root folder instead.
@@ -28,8 +33,8 @@ class CDTB_color_depth_mask(BaseVideoDataset):
                         options can be used at the same time.
             data_fraction - Fraction of dataset to be used. The complete dataset is used by default
         """
-        root = env_settings().got10k_dir if root is None else root
-        super().__init__('CDTB_color_depth_mask', root, image_loader)
+        root = env_settings().cdtb_dir if root is None else root
+        super().__init__('CDTB_color_depth', root, image_loader)
 
         # all folders inside the root
         self.sequence_list = self._get_sequence_list()
@@ -61,7 +66,7 @@ class CDTB_color_depth_mask(BaseVideoDataset):
         self.class_list.sort()
 
     def get_name(self):
-        return 'CDTB_color_depth_mask'
+        return 'CDTB_color_depth'
 
     def has_class_info(self):
         return True

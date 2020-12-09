@@ -2,9 +2,9 @@ import numpy as np
 from pytracking.evaluation.data import Sequence, BaseDataset, SequenceList
 
 
-class CDTBColorDepthMaskValDataset(BaseDataset):
+class CDTBColorDepthValDataset(BaseDataset):
     """
-    CDTB, 1) using the depth to mask the train RGB images
+    CDTB, to provide both the RGB and the Depth images
     """
     def __init__(self):
         super().__init__()
@@ -46,9 +46,10 @@ class CDTBColorDepthMaskValDataset(BaseDataset):
             y2 = np.amax(gt_y_all, 1).reshape(-1,1)
 
             ground_truth_rect = np.concatenate((x1, y1, x2-x1, y2-y1), 1)
-        return Sequence(sequence_name, frames_rgb, 'cdtb_color_depth_mask', ground_truth_rect,
+        return Sequence(sequence_name, frames_rgb, 'cdtb_color_depth', ground_truth_rect,
                         depth_frames=frames_depth,
-                        is_depth=False)
+                        is_depth=False,
+                        depth_usage='hist_depth_mask') # Song !!!!!
 
     def __len__(self):
         return len(self.sequence_list)

@@ -154,7 +154,6 @@ def gaussian_prob(x, mu, std):
     var = float(std)**2
     denom = (2*math.pi*var)**.5
     num = np.exp(-(x-float(mu))**2/(2*var))
-    # return num/denom
     return num
 
 def candidate_depth_from_histogram(depth_img, num_bins=8):
@@ -164,13 +163,8 @@ def candidate_depth_from_histogram(depth_img, num_bins=8):
     '''
 
     # 1) crop the depth area
-    # print(box)
-    # box_depths = depth_img[box[1]:box[1]+box[3], box[0]:box[0]+box[2]]
-    # center_depth = depth_img[int((box[1]+box[3])/2.0), int((box[0]+box[2])/2.0)]
-
     dp_values = np.array(depth_img, dtype=np.float32).flatten()
     dp_values.sort()
-    # print(dp_values)
 
     max_depth_img = np.max(depth_img.flatten())
     if len(dp_values) > 0:
@@ -180,15 +174,20 @@ def candidate_depth_from_histogram(depth_img, num_bins=8):
         candidate_depth = 0
         return prob_map, candidate_depth
 
-
     # 2) perform the historgram to count the frequency of the depth values
     hist, bin_edges = np.histogram(dp_values, bins=num_bins)
     hist = list(hist)
 
     hist_sorted = hist
     hist_sorted.sort()
+
     # 3) select the candidate depth
-    candidate_idx = hist.index(hist_sorted[-2]) # select the second one as the candidate
+    '''
+     select the second one as the candidate
+     assume that the largest depth value belongs to background,
+     # think, why we dont remove the background directly
+    '''
+    candidate_idx = hist.index(hist_sorted[-2]) #
     bin_lower = bin_edges[candidate_idx]
     bin_upper = bin_edges[candidate_idx+1]
 
@@ -205,23 +204,21 @@ def candidate_depth_from_histogram(depth_img, num_bins=8):
 
 def plot_prob_map(rgb_ori,  rgb_masked,  dp, prob_map):
     ''' Example Plot '''
-    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
-
-    ax1.imshow(rgb_ori)
 
     dp_colormap = cv.normalize(dp, None, alpha=0, beta=255, norm_type=cv.NORM_MINMAX, dtype=cv.CV_8UC1)
     dp_colormap = cv.applyColorMap(dp_colormap, cv.COLORMAP_JET)
+
+    fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2,2)
+
+    ax1.imshow(rgb_ori)
     ax2.imshow(dp_colormap)
-
     ax3.imshow(rgb_masked)
-
     ax4.imshow(prob_map)
 
     plt.show()
-    # plt.pause(5)
     plt.close()
 
-def sample_patch_with_depth(im: torch.Tensor, depth: torch.Tensor, pos: torch.Tensor, sample_sz: torch.Tensor, output_sz: torch.Tensor = None,
+def sample_patch_hist_depth_mask(im: torch.Tensor, depth: torch.Tensor, pos: torch.Tensor, sample_sz: torch.Tensor, output_sz: torch.Tensor = None,
                  mode: str = 'replicate', max_scale_change=None, is_mask=False, is_depth=False):
     """Sample an image patch.
 
@@ -278,24 +275,11 @@ def sample_patch_with_depth(im: torch.Tensor, depth: torch.Tensor, pos: torch.Te
 
     '''
     Song : performing depth mask here ?? it seems useless
-    '''
-    # dp2 = dp2.numpy()
-    # prob_map, _ = candidate_depth_from_histogram(dp2)
-    # prob_threshold = 0.2
-    # depth_mask = prob_map > prob_threshold
-    # depth_mask = depth_mask.astype(int)
-    #
-    # rgb1 = im2.numpy() # (1, 3, 360, 640)
-    # rgb1 = np.squeeze(rgb1)
-    # rgb1 = np.transpose(rgb1, (1, 2, 0))    # (288, 288, 3) normalized rgb image
-    # rgb2 = np.copy(rgb1)
-    # rgb2[depth_mask==0] = 0                 # masking
-    # rgb3 = np.copy(rgb2)
-    # rgb3 = np.transpose(rgb3, (2, 0, 1))    # (3, 288, 288)
-    # im2 = torch.from_numpy(rgb3[np.newaxis, :])
-    # # print(im2.shape)
-    # plot_prob_map(rgb1,  rgb2,  dp2, prob_map)
 
+          so performing nothing here during testing
+
+          DO Nothing here !!!!!!!
+    '''
 
     # compute size to crop
     szl = torch.max(sz.round(), torch.Tensor([2])).long()
@@ -320,13 +304,12 @@ def sample_patch_with_depth(im: torch.Tensor, depth: torch.Tensor, pos: torch.Te
         # im_patch = im2[...,tl[0].item():br[0].item(),tl[1].item():br[1].item()]
     # print(' song im2.shape : ', im2.shape) # (1, 3, 180, 320)
     # print(' song dp2.shape : ', dp2.shape) # (180, 320)
+
     # Get image patch
     if not is_mask:
         im_patch = F.pad(im2, (-tl[1].item(), br[1].item() - im2.shape[3], -tl[0].item(), br[0].item() - im2.shape[2]), pad_mode)
-        # dp_patch = F.pad(dp2, (-tl[1].item(), br[1].item() - im2.shape[3], -tl[0].item(), br[0].item() - im2.shape[2]), pad_mode)
     else:
         im_patch = F.pad(im2, (-tl[1].item(), br[1].item() - im2.shape[3], -tl[0].item(), br[0].item() - im2.shape[2]))
-        # dp_patch = F.pad(dp2, (-tl[1].item(), br[1].item() - im2.shape[3], -tl[0].item(), br[0].item() - im2.shape[2]))
 
     # print('song im_patch.shape : ', im_patch.shape) # (1, 3, 283, 283)
     # print('song dp_patch.shape : ', dp_path.shape)
