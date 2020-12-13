@@ -9,7 +9,7 @@ from ltr.data.image_loader import imwrite_indexed
 import cv2
 from matplotlib import pyplot as plt
 
-def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
+def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict, run_id=None):
     """Saves the output of the tracker."""
 
     if not os.path.exists(tracker.results_dir):
@@ -64,12 +64,18 @@ def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
 
                 for obj_id, d in data_dict.items():
                     # bbox_file = '{}_{}.txt'.format(base_results_path, obj_id)
-                    bbox_file = '{}/{}_{}.txt'.format(base_results_path, seq.name, obj_id)
+                    if run_id:
+                        bbox_file = '{}/{}_{}_{:03}.txt'.format(base_results_path, seq.name, obj_id,run_id)
+                    else:
+                        bbox_file = '{}/{}_{}.txt'.format(base_results_path, seq.name, obj_id)
                     save_bb(bbox_file, d)
             else:
                 # Single-object mode
                 # bbox_file = '{}.txt'.format(base_results_path)
-                bbox_file = '{}/{}.txt'.format(base_results_path, seq.name)
+                if run_id:
+                    bbox_file = '{}/{}_{:03}.txt'.format(base_results_path, seq.name, run_id)
+                else:
+                    bbox_file = '{}/{}.txt'.format(base_results_path, seq.name)
                 save_bb(bbox_file, data)
 
         elif key == 'time':
@@ -78,11 +84,17 @@ def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
 
                 for obj_id, d in data_dict.items():
                     # timings_file = '{}_{}_time.txt'.format(base_results_path, obj_id)
-                    timings_file = '{}/{}_{}_time.txt'.format(base_results_path, seq.name, obj_id)
+                    if run_id:
+                        timings_file = '{}/{}_{}_{:03}_time.txt'.format(base_results_path, seq.name, obj_id, run_id)
+                    else:
+                        timings_file = '{}/{}_{}_time.txt'.format(base_results_path, seq.name, obj_id)
                     save_time(timings_file, d)
             else:
                 # timings_file = '{}_time.txt'.format(base_results_path)
-                timings_file = '{}/{}_time.txt'.format(base_results_path, seq.name)
+                if run_id:
+                    timings_file = '{}/{}_{:03}_time.txt'.format(base_results_path, seq.name, run_id)
+                else:
+                    timings_file = '{}/{}_time.txt'.format(base_results_path, seq.name)
                 save_time(timings_file, data)
 
         elif key == 'confidence':
@@ -91,11 +103,17 @@ def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
 
                 for obj_id, d in data_dict.items():
                     # confidence_file = '{}_{}_confidence.txt'.format(base_results_path, obj_id)
-                    confidence_file = '{}/{}_{}_confidence.value'.format(base_results_path, seq.name, obj_id)
+                    if run_id:
+                        confidence_file = '{}/{}_{}_{:03}_confidence.value'.format(base_results_path, seq.name, obj_id, run_id)
+                    else:
+                        confidence_file = '{}/{}_{}_confidence.value'.format(base_results_path, seq.name, obj_id)
                     save_time(confidence_file, d)
             else:
                 # confidence_file = '{}_confidence.txt'.format(base_results_path)
-                confidence_file = '{}/{}_confidence.value'.format(base_results_path, seq.name)
+                if run_id:
+                    confidence_file = '{}/{}_{:03}_confidence.value'.format(base_results_path, seq.name, run_id)
+                else:
+                    confidence_file = '{}/{}_confidence.value'.format(base_results_path, seq.name)
                 save_time(confidence_file, data)
 
         elif key == 'segmentation':
@@ -105,32 +123,40 @@ def _save_tracker_output(seq: Sequence, tracker: Tracker, output: dict):
             for frame_name, frame_seg in zip(frame_names, data):
                 imwrite_indexed(os.path.join(segmentation_path, '{}.png'.format(frame_name)), frame_seg)
 
-        elif key == 'score_map':
-            # print(len(data),len(frame_names))
-            assert len(frame_names) == len(data)
-            if not os.path.exists(scoremap_path):
-                os.makedirs(scoremap_path)
-            for frame_name, frame_score in zip(frame_names, data):
-                # imwrite_indexed(os.path.join(scoremap_path, '{}.png'.format(frame_name)), frame_score)
-                # print(frame_score.shape)
-                # frame_score = cv2.applyColorMap(np.asarray(frame_score*255, dtype=np.uint8), cv2.COLORMAP_JET)
-                # cv2.imwrite(os.path.join(scoremap_path, '{}.png'.format(frame_name)), frame_score)
+        # elif key == 'score_map':
+        #     # print(len(data),len(frame_names))
+        #     assert len(frame_names) == len(data)
+        #     if not os.path.exists(scoremap_path):
+        #         os.makedirs(scoremap_path)
+        #     for frame_name, frame_score in zip(frame_names, data):
+        #         # imwrite_indexed(os.path.join(scoremap_path, '{}.png'.format(frame_name)), frame_score)
+        #         # print(frame_score.shape)
+        #         # frame_score = cv2.applyColorMap(np.asarray(frame_score*255, dtype=np.uint8), cv2.COLORMAP_JET)
+        #         # cv2.imwrite(os.path.join(scoremap_path, '{}.png'.format(frame_name)), frame_score)
+        #         plt.imshow(frame_score)
+        #         plt.savefig(os.path.join(scoremap_path, '{}.png'.format(frame_name)))
+        #         plt.close()
 
-                plt.imshow(frame_score)
-                plt.savefig(os.path.join(scoremap_path, '{}.png'.format(frame_name)))
-                plt.close()
-
-def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None):
+def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None, run_id=None):
     """Runs a tracker on a sequence."""
 
     def _results_exist():
         if seq.object_ids is None:
-            bbox_file = '{}/{}.txt'.format(tracker.results_dir, seq.name)
+            if run_id is None:
+                bbox_file = '{}/{}/{}.txt'.format(tracker.results_dir, seq.name, seq.name)
+            else:
+                bbox_file = '{}/{}/{}_{:03}.txt'.format(tracker.results_dir, seq.name, seq.name, run_id)
             return os.path.isfile(bbox_file)
         else:
-            bbox_files = ['{}/{}_{}.txt'.format(tracker.results_dir, seq.name, obj_id) for obj_id in seq.object_ids]
+            # Song changes the output path, for each sequences
+            if run_id is None:
+                bbox_files = ['{}/{}/{}_{}.txt'.format(tracker.results_dir, seq.name, seq.name, obj_id) for obj_id in seq.object_ids]
+            else:
+                bbox_files = ['{}/{}/{}_{}_{:03}.txt'.format(tracker.results_dir, seq.name, seq.name, obj_id, run_id) for obj_id in seq.object_ids]
             missing = [not os.path.isfile(f) for f in bbox_files]
             return sum(missing) == 0
+            # bbox_file = '{}/{}/{}_{:03}.txt'.format(tracker.results_dir, seq.name, seq.name, run_id)
+            # return os.path.isfile(bbox_file)
 
     visdom_info = {} if visdom_info is None else visdom_info
 
@@ -161,10 +187,10 @@ def run_sequence(seq: Sequence, tracker: Tracker, debug=False, visdom_info=None)
     print('FPS: {}'.format(num_frames / exec_time))
 
     if not debug:
-        _save_tracker_output(seq, tracker, output)
+        _save_tracker_output(seq, tracker, output, run_id=run_id)
 
 
-def run_dataset(dataset, trackers, debug=False, threads=0, visdom_info=None):
+def run_dataset(dataset, trackers, debug=False, threads=0, visdom_info=None, run_id=None):
     """Runs a list of trackers on a dataset.
     args:
         dataset: List of Sequence instances, forming a dataset.
@@ -172,6 +198,8 @@ def run_dataset(dataset, trackers, debug=False, threads=0, visdom_info=None):
         debug: Debug level.
         threads: Number of threads to use (default 0).
         visdom_info: Dict containing information about the server for visdom
+
+        run_id : Song added it, for bbox_file saving, seqname_{03}.txt!!!!
     """
     multiprocessing.set_start_method('spawn', force=True)
 
@@ -189,9 +217,9 @@ def run_dataset(dataset, trackers, debug=False, threads=0, visdom_info=None):
     if mode == 'sequential':
         for seq in dataset:
             for tracker_info in trackers:
-                run_sequence(seq, tracker_info, debug=debug, visdom_info=visdom_info)
+                run_sequence(seq, tracker_info, debug=debug, visdom_info=visdom_info, run_id=run_id)
     elif mode == 'parallel':
-        param_list = [(seq, tracker_info, debug, visdom_info) for seq, tracker_info in product(dataset, trackers)]
+        param_list = [(seq, tracker_info, debug, visdom_info, run_id) for seq, tracker_info in product(dataset, trackers)]
         with multiprocessing.Pool(processes=threads) as pool:
             pool.starmap(run_sequence, param_list)
     print('Done')

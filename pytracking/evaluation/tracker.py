@@ -60,9 +60,12 @@ class Tracker:
             self.segmentation_dir = '{}/{}/{}'.format(env.segmentation_path, self.name, self.parameter_name)
             self.scoremap_dir = '{}/{}/{}'.format(env.scoremap_path, self.name, self.parameter_name)
         else:
-            self.results_dir = '{}/{}/{}_{:03d}'.format(env.results_path, self.name, self.parameter_name, self.run_id)
-            self.segmentation_dir = '{}/{}/{}_{:03d}'.format(env.segmentation_path, self.name, self.parameter_name, self.run_id)
-            self.scoremap_dir = '{}/{}/{}_{:03d}'.format(env.scoremap_path, self.name, self.parameter_name, self.run_id)
+            # self.results_dir = '{}/{}/{}_{:03d}'.format(env.results_path, self.name, self.parameter_name, self.run_id)
+            # self.segmentation_dir = '{}/{}/{}_{:03d}'.format(env.segmentation_path, self.name, self.parameter_name, self.run_id)
+            # self.scoremap_dir = '{}/{}/{}_{:03d}'.format(env.scoremap_path, self.name, self.parameter_name, self.run_id)
+            self.results_dir = '{}/{}/{}'.format(env.results_path, self.name, self.parameter_name)
+            self.segmentation_dir = '{}/{}/{}'.format(env.segmentation_path, self.name, self.parameter_name)
+            self.scoremap_dir = '{}/{}/{}'.format(env.scoremap_path, self.name, self.parameter_name)
 
         tracker_module_abspath = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'tracker', self.name))
         if os.path.isdir(tracker_module_abspath):

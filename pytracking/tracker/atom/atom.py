@@ -454,7 +454,8 @@ class ATOM(BaseTracker):
         return self.params.features.get_unique_attribute('iounet_backbone_features')
 
     def extract_processed_sample(self, im: torch.Tensor, pos: torch.Tensor, scales, sz: torch.Tensor) -> (TensorList, TensorList):
-        x = self.extract_sample(im, pos, scales, sz)
+        x = self.extract_sample(im, pos, scales, sz)  # Song, this is the feature map from ResNet18
+        # print('Song atom.py line 458: x from ResNet18, extract_sample : ', x.shape)
         return self.preprocess_sample(self.project_sample(x))
 
     def extract_processed_sample_hist_depth_mask(self, im: torch.Tensor, depth: torch.Tensor, pos: torch.Tensor, scales, sz: torch.Tensor) -> (TensorList, TensorList):

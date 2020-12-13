@@ -34,7 +34,7 @@ def run_tracker(tracker_name, tracker_param, run_id=None, dataset_name='otb', se
 
     trackers = [Tracker(tracker_name, tracker_param, run_id)]
 
-    run_dataset(dataset, trackers, debug, threads, visdom_info=visdom_info)
+    run_dataset(dataset, trackers, debug, threads, visdom_info=visdom_info, run_id=run_id) # Song add run_id for box_file saving
 
 
 def main():
