@@ -22,7 +22,7 @@ class DETR(nn.Module):
             2) To remove the num_classes, num_queries, because they are 1
             3) To replace the class_embed to conf_embed ??? to predict the confidence?
     """
-    def __init__(self, backbone, transformer):
+    def __init__(self, backbone, transformer, postprocessors):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -37,8 +37,9 @@ class DETR(nn.Module):
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         self.query_proj = QueryProj(backbone.num_channels, hidden_dim)          # Song added, project Template features into query
         self.backbone = backbone
+        self.postprocessors = postprocessors
 
-    def forward(self, search_imgs, template_imgs, template_bb=None):
+    def forward(self, search_imgs, template_imgs, template_bb=None, target_sizes=None):
         """ The forward expects a NestedTensor, which consists of:
                - template_imgs : batched images, of shape [batch_size x 3 x H x W], which are the template branch
                - template_bb   : batched bounding boxes, of shape [batch_size x 4]
@@ -79,6 +80,8 @@ class DETR(nn.Module):
         outputs_coord = self.bbox_embed(hs).sigmoid()
 
         out = {'pred_conf': outputs_conf[-1], 'pred_boxes': outputs_coord[-1]}
+
+        out = postprocessors(out, target_sizes)
         return out
 
 class PostProcess(nn.Module):
@@ -152,9 +155,8 @@ def transformer_track(args):
 
     backbone = build_backbone(args)
     transformer = build_transformer(args)
+    postprocessors = PostProcess()
 
-    model = DETR(backbone, transformer)
+    model = DETR(backbone, transformer, postprocessors)
 
-    postprocessors = {'bbox': PostProcess()}
-
-    return model, postprocessors
+    return model
