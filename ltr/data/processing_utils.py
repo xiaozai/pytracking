@@ -676,6 +676,56 @@ def target_image_crop(frames, box_extract, box_gt, search_area_factor, output_sz
     else:
         return frames_crop, box_crop, masks_crop
 
+def template_image_crop(frames, box_extract, box_gt, search_area_factor, output_sz, mode: str = 'replicate',
+                      max_scale_change=None, masks=None):
+    """ For each frame in frames, extracts a square crop centered at box_extract, of area search_area_factor^2
+    times box_extract area. If the crop area contains regions outside the image, it is shifted / shrunk so that it
+    completely fits inside the image. The extracted crops are then resized to output_sz. Further, the co-ordinates of
+    the box box_gt are transformed to the image crop co-ordinates
+
+    args:
+        frames - list of frames
+        box_extract - list of boxes of same length as frames. The crops are extracted using anno_extract
+        box_gt - list of boxes of same length as frames. The co-ordinates of these boxes are transformed from
+                    image co-ordinates to the crop co-ordinates
+        search_area_factor - The area of the extracted crop is search_area_factor^2 times box_extract area
+        output_sz - The size to which the extracted crops are resized
+        mode - If 'replicate', the boundary pixels are replicated in case the search region crop goes out of image.
+               If 'inside', the search region crop is shifted/shrunk to fit completely inside the image.
+               If 'inside_major', the search region crop is shifted/shrunk to fit completely inside one axis of the image.
+        max_scale_change - Maximum allowed scale change when performing the crop (only applicable for 'inside' and 'inside_major')
+        masks - Optional masks to apply the same crop.
+
+    returns:
+        list - list of image crops
+        list - box_gt location in the crop co-ordinates
+        """
+
+    if isinstance(output_sz, (float, int)):
+        output_sz = (output_sz, output_sz)
+
+    if masks is None:
+        frame_crops_boxes = [sample_target_adaptive(f, a, search_area_factor, output_sz, mode, max_scale_change)
+                             for f, a in zip(frames, box_extract)]
+
+        frames_crop, crop_boxes = zip(*frame_crops_boxes)
+    else:
+        frame_crops_boxes_masks = [
+            sample_target_adaptive(f, a, search_area_factor, output_sz, mode, max_scale_change, mask=m)
+            for f, a, m in zip(frames, box_extract, masks)]
+
+        frames_crop, crop_boxes, masks_crop = zip(*frame_crops_boxes_masks)
+
+    crop_sz = torch.Tensor(output_sz)
+
+    # find the bb location in the crop
+    box_crop = [transform_box_to_crop(bb_gt, crop_bb, crop_sz)
+                for bb_gt, crop_bb in zip(box_gt, crop_boxes)]
+
+    if masks is None:
+        return frames_crop, box_crop
+    else:
+        return frames_crop, box_crop, masks_crop
 
 def iou(reference, proposals):
     """Compute the IoU between a reference box with multiple proposal boxes.

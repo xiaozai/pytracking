@@ -39,13 +39,17 @@ class DETR(nn.Module):
         self.backbone = backbone
         self.postprocessors = postprocessors
 
+    def crop_and_resize(im, box, output_sz):
+
+        return im_out
+
     def forward(self, search_imgs, template_imgs, template_bb=None, target_sizes=None):
         """ The forward expects a NestedTensor, which consists of:
                - template_imgs : batched images, of shape [batch_size x 3 x H x W], which are the template branch
                - template_bb   : batched bounding boxes, of shape [batch_size x 4]
 
                - search_imgs : batched test images , of shape [batch_size x 3 x H x W], which are the test branch
-
+                               is a cropped squred images, they have the same shape
 
             It returns a dict with the following elements:
 
@@ -57,23 +61,17 @@ class DETR(nn.Module):
                                See PostProcess for information on how to retrieve the unnormalized bounding box.
         """
 
+        if target_sizes is None:
+            target_sizes = search_imgs.shape  # ????
+
         features, pos = self.backbone(search_imgs)
         src, mask = features[-1].decompose()
         assert mask is not None
 
-        '''
-        Song : should I crop the template_imgs with the template_bb ??? or do it on the feature maps?????
-                if the backbone is only convs layers, we can use the cropped template_imgs
-        '''
-        template_features, _ = self.backbone(template_imgs)
-        template_src, template_mask = template_features[-1].decompose()
-        assert template_mask is not None
+        cropped_template_images = torch.tensor_from_numpy([self.crop_and_resize(f, b, self.output_size) for f, b in zip(template_imgs, template_bb)])
+        template_features, _ = self.backbone(cropped_template_images)
+        template_src, _ = template_features[-1].decompose()
 
-        '''
-        THe only difference is to fix the query_embedding with the template feature
-
-        HS : it outputs the stact of 6 tensor, but keep the first one?, e.g. [dc_layers=6, num_classes=100, batch, 256]
-        '''
         hs = self.transformer(self.input_proj(src), mask, self.query_proj(template_src), pos[-1])[0]
 
         outputs_conf = self.conf_embed(hs)                                      # Song added
@@ -151,7 +149,7 @@ class QueryProj(nn.Module):
         return torch.unsqueeze(x, 1)  # [batch, 1, 256]
 
 @model_constructor
-def transformer_track(args):
+def build_tracker(args):
 
     backbone = build_backbone(args)
     transformer = build_transformer(args)
