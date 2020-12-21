@@ -661,19 +661,12 @@ class TransformerProcessing(BaseProcessing):
     The search region is then resized to a fixed size given by the argument output_sz.
 
 
-    # Song, don't need in TransformerTrack, since it outputs the bbox directly ???
-    #
-    A Gaussian label centered at the target is generated for each image. These label functions are
-    used for computing the loss of the predicted classification model on the test images.
-
-    # Song  No need in TransformerTrack,
-    A set of proposals are also generated for the test images by jittering the ground truth box. These proposals are used to train the
-    bounding box estimating branch.
+    the template / train images will be cropped based on the groundtruth bboxes, and then resized to template_output_sz
 
     """
 
     def __init__(self, search_area_factor, output_sz, center_jitter_factor, scale_jitter_factor, crop_type='replicate',
-                 max_scale_change=None, mode='pair', *args, **kwargs):
+                 max_scale_change=None, mode='pair', template_output_sz=(112, 112), *args, **kwargs):
         """
         args:
             search_area_factor - The size of the search region  relative to the target size.
@@ -701,6 +694,7 @@ class TransformerProcessing(BaseProcessing):
         self.crop_type = crop_type
         self.mode = mode
         self.max_scale_change = max_scale_change
+        self.template_output_sz = template_output_sz
 
     def _get_jittered_box(self, box, mode):
         """ Jitter the input box
@@ -729,10 +723,7 @@ class TransformerProcessing(BaseProcessing):
                 'train_images', 'test_images', 'train_anno', 'test_anno',
                 return cropped_train_images
 
-                And, train_images + train_anno => cropped_train_images ????
-                # Song deleted them
-                # 'test_proposals', 'proposal_iou',
-                # 'test_label' (optional), 'train_label' (optional), 'test_label_density' (optional), 'train_label_density' (optional)
+                And, train_images + train_anno => cropped_train_images (naive way !!!!!)
         """
 
         if self.transform['joint'] is not None:
@@ -758,8 +749,8 @@ class TransformerProcessing(BaseProcessing):
                  # Song , crop the template / train images with the train_anno
                  actually this part can use the PrROIPooling in the network
                 '''
-                crop_size = (112, 112)
-                crops = prutils.template_image_crop(data[s + '_images'], data[s + '_anno'], crop_size)
+                # crop_size = (112, 112)
+                crops = prutils.template_image_crop(data[s + '_images'], data[s + '_anno'], self.template_output_sz)
                 boxes = data[s + '_anno'] # Song : useless
                 data[s + '_images'], _ = self.transform[s](image=crops, bbox=boxes, joint=False)
 

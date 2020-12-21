@@ -13,21 +13,17 @@ class SetCriterion(nn.Module):
         1) we compute hungarian assignment between ground truth boxes and the outputs of the model
         2) we supervise each pair of matched ground-truth / prediction (supervise class and box)
     """
-    def __init__(self, losses, weight_dict):
+    def __init__(self, losses=['boxes_iou_conf']):
         """ Create the criterion.
         Parameters:
-            Song Removed # num_classes: number of object categories, omitting the special no-object category
-            Song Removed # matcher: module able to compute a matching between targets and proposals
             weight_dict: dict containing as key the names of the losses and as values their relative weight.
-            eos_coef: relative classification weight applied to the no-object category, Song convert this one to Non-target box in tracking!!!
             losses: list of all the losses to be applied. See get_loss for list of available losses.
         """
         super().__init__()
 
-        self.weight_dict = weight_dict
         self.losses = losses
 
-    def loss_boxes(self, outputs, targets):
+    def loss_boxes_iou_conf(self, outputs, targets):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
            # # targets dicts must contain the key "boxes" containing a tensor of dim [nb_target_boxes, 4]
            # # The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
@@ -60,7 +56,7 @@ class SetCriterion(nn.Module):
 
     def get_loss(self, loss, outputs, targets, **kwargs):
         loss_map = {
-            'boxes': self.loss_boxes,
+            'boxes_iou_conf': self.loss_boxes_iou_conf,
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, **kwargs)

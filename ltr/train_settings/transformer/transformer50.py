@@ -56,7 +56,8 @@ def run(settings):
                                                              scale_jitter_factor=settings.scale_jitter_factor,
                                                              mode='sequence',
                                                              transform=transform_train,
-                                                             joint_transform=transform_joint)
+                                                             joint_transform=transform_joint,
+                                                             template_output_sz=(112, 112)) # crop and resize template images with bbox
 
     data_processing_val = processing.TransformerProcessing(search_area_factor=settings.search_area_factor,
                                                            output_sz=settings.output_sz,
@@ -64,7 +65,8 @@ def run(settings):
                                                            scale_jitter_factor=settings.scale_jitter_factor,
                                                            mode='sequence',
                                                            transform=transform_val,
-                                                           joint_transform=transform_joint)
+                                                           joint_transform=transform_joint,
+                                                           template_output_sz=(112, 112)) # crop and resize template images with bbox
 
     # Train sampler and loader
     dataset_train = sampler.TransformerSampler([lasot_train, got10k_train, trackingnet_train, coco_train], [0.25,1,1,1],
@@ -101,7 +103,8 @@ def run(settings):
         net = MultiGPU(net, dim=1)
 
     # objective = {'iou': nn.MSELoss(), 'test_clf': ltr_losses.LBHinge(threshold=settings.hinge_threshold)}
-    objective = {'bboxes': SetCriterion()} # Song wants the giou loss in Detr
+    # objective = {'bboxes': SetCriterion()} # Song wants the giou loss in Detr
+    objective = SetCriterion(losses=['boxes_iou_conf'])
 
     loss_weight = {'bbox': 1, 'iou': 1, 'conf': 100}
 
