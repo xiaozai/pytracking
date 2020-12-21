@@ -274,14 +274,25 @@ def _get_clones(module, N):
 
 
 
-def build_transformer(args):
+def build_transformer(hidden_dim=256, dropout=0.1, nheads=8, dim_feedforward=2048, enc_layers=6, dec_layers=6, pre_norm=False):
+
+    '''
+    Song copied the args from Detr,
+        -hiddent_dim     : Size of the embeddings (dimension of the transformer)
+        -dropout         : Dropout applied in the transformer
+        -nheads          : Number of attention heads inside the transformer's attentions
+        -dim_feedforward : Intermediate size of the feedforward layers in the transformer blocks
+        -enc_layers      : Number of encoding layers in the transformer
+        -dec_layers      : Number of decoding layers in the transformer
+        -pre_norm        : normalization or not in the transformer (Song guesses)
+    '''
     return Transformer(
-        d_model=args.hidden_dim,              # 256
-        dropout=args.dropout,                 # 0.1
-        nhead=args.nheads,                    # 8
-        dim_feedforward=args.dim_feedforward, # 2048
-        num_encoder_layers=args.enc_layers,   # 6
-        num_decoder_layers=args.dec_layers,   # 6
-        normalize_before=args.pre_norm,       # True or False ???
+        d_model=hidden_dim,
+        dropout=dropout,
+        nhead=nheads,
+        dim_feedforward=dim_feedforward,
+        num_encoder_layers=enc_layers,
+        num_decoder_layers=dec_layers,
+        normalize_before=pre_norm,
         return_intermediate_dec=True,
     )

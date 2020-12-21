@@ -2,7 +2,7 @@ import torch
 import torch.nn.functional as F
 from torch import nn
 
-import box_ops
+import ltr.data.box_ops as box_ops
 
 class SetCriterion(nn.Module):
     """
@@ -27,25 +27,26 @@ class SetCriterion(nn.Module):
         self.weight_dict = weight_dict
         self.losses = losses
 
-
     def loss_boxes(self, outputs, targets):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
-           targets dicts must contain the key "boxes" containing a tensor of dim [nb_target_boxes, 4]
-           The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
+           # # targets dicts must contain the key "boxes" containing a tensor of dim [nb_target_boxes, 4]
+           # # The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
+           Song : The target boxes are in format (x, y, w, h)
         """
         assert 'pred_boxes' in outputs
 
         src_boxes = outputs['pred_boxes']
-        target_boxes = torch.cat([t['boxes'] for t in zip(targets)], dim=0)
+        # target_boxes = torch.cat([t['boxes'] for t in zip(targets)], dim=0)
 
-        loss_bbox = F.l1_loss(src_boxes, target_boxes, reduction='none')
+        loss_bbox = F.l1_loss(src_boxes, targets, reduction='none')
 
         losses = {}
         losses['loss_bbox'] = loss_bbox.sum()
 
-        target_confidences = torch.diag(box_ops.generalized_box_iou(
-            box_ops.box_cxcywh_to_xyxy(src_boxes),
-            box_ops.box_cxcywh_to_xyxy(target_boxes)))
+        # target_confidences = torch.diag(box_ops.generalized_box_iou(
+        #     box_ops.box_cxcywh_to_xyxy(src_boxes),
+        #     box_ops.box_cxcywh_to_xyxy(target_boxes)))
+        target_confidences = torch.diag(box_ops.generalized_box_iou(src_boxes, targets))
 
         loss_giou = 1 - target_confidences
         losses['loss_giou'] = loss_giou.sum()
