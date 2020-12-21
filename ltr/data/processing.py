@@ -702,9 +702,6 @@ class TransformerProcessing(BaseProcessing):
         self.mode = mode
         self.max_scale_change = max_scale_change
 
-        # self.proposal_params = proposal_params
-        # self.label_function_params = label_function_params
-
     def _get_jittered_box(self, box, mode):
         """ Jitter the input box
         args:
@@ -721,53 +718,6 @@ class TransformerProcessing(BaseProcessing):
 
         return torch.cat((jittered_center - 0.5 * jittered_size, jittered_size), dim=0)
 
-    # def _generate_proposals(self, box):
-    #     """ Generates proposals by adding noise to the input box
-    #     args:
-    #         box - input box
-    #
-    #     returns:
-    #         torch.Tensor - Array of shape (num_proposals, 4) containing proposals
-    #         torch.Tensor - Array of shape (num_proposals,) containing IoU overlap of each proposal with the input box. The
-    #                     IoU is mapped to [-1, 1]
-    #     """
-    #     # Generate proposals
-    #     num_proposals = self.proposal_params['boxes_per_frame']
-    #     proposal_method = self.proposal_params.get('proposal_method', 'default')
-    #
-    #     if proposal_method == 'default':
-    #         proposals = torch.zeros((num_proposals, 4))
-    #         gt_iou = torch.zeros(num_proposals)
-    #
-    #         for i in range(num_proposals):
-    #             proposals[i, :], gt_iou[i] = prutils.perturb_box(box, min_iou=self.proposal_params['min_iou'],
-    #                                                              sigma_factor=self.proposal_params['sigma_factor'])
-    #     elif proposal_method == 'gmm':
-    #         proposals, _, _ = prutils.sample_box_gmm(box, self.proposal_params['proposal_sigma'],
-    #                                                  num_samples=num_proposals)
-    #         gt_iou = prutils.iou(box.view(1, 4), proposals.view(-1, 4))
-    #     else:
-    #         raise ValueError('Unknown proposal method.')
-    #
-    #     # Map to [-1, 1]
-    #     gt_iou = gt_iou * 2 - 1
-    #     return proposals, gt_iou
-
-    # def _generate_label_function(self, target_bb):
-    #     """ Generates the gaussian label function centered at target_bb
-    #     args:
-    #         target_bb - target bounding box (num_images, 4)
-    #
-    #     returns:
-    #         torch.Tensor - Tensor of shape (num_images, label_sz, label_sz) containing the label for each sample
-    #     """
-    #
-    #     gauss_label = prutils.gaussian_label_function(target_bb.view(-1, 4), self.label_function_params['sigma_factor'],
-    #                                                   self.label_function_params['kernel_sz'],
-    #                                                   self.label_function_params['feature_sz'], self.output_sz,
-    #                                                   end_pad_if_even=self.label_function_params.get('end_pad_if_even', True))
-    #
-    #     return gauss_label
 
     def __call__(self, data: TensorDict):
         """
@@ -794,7 +744,7 @@ class TransformerProcessing(BaseProcessing):
                 "In pair mode, num train/test frames must be 1"
 
             if s == 'test':
-                # Add a uniform noise to the center pos
+                # Add a uniform noise to the center pos, to avoid the target is always in the center of the image
                 jittered_anno = [self._get_jittered_box(a, s) for a in data[s + '_anno']]
 
                 crops, boxes = prutils.target_image_crop(data[s + '_images'], jittered_anno, data[s + '_anno'],
@@ -802,33 +752,22 @@ class TransformerProcessing(BaseProcessing):
                                                          max_scale_change=self.max_scale_change)
 
                 data[s + '_images'], data[s + '_anno'] = self.transform[s](image=crops, bbox=boxes, joint=False)
+
             elif s == 'train':
                 '''
-                Song , crop the template / train images with the train_anno
+                 # Song , crop the template / train images with the train_anno
+                 actually this part can use the PrROIPooling in the network
                 '''
-                crops = prutils.template_image_crop(data[s + '_images'], data[s + '_anno'],
-                                                    self.output_sz, mode=self.crop_type,
-                                                    max_scale_change=self.max_scale_change)
-
+                crop_size = (112, 112)
+                crops = prutils.template_image_crop(data[s + '_images'], data[s + '_anno'], crop_size)
+                boxes = data[s + '_anno'] # Song : useless
                 data[s + '_images'], _ = self.transform[s](image=crops, bbox=boxes, joint=False)
-
-        # Generate proposals
-        # if self.proposal_params:
-        #     frame2_proposals, gt_iou = zip(*[self._generate_proposals(a) for a in data['test_anno']])
-        #
-        #     data['test_proposals'] = list(frame2_proposals)
-        #     data['proposal_iou'] = list(gt_iou)
 
         # Prepare output
         if self.mode == 'sequence':
             data = data.apply(stack_tensors)
         else:
             data = data.apply(lambda x: x[0] if isinstance(x, list) else x)
-
-        # Generate label functions
-        # if self.label_function_params is not None:
-        #     data['train_label'] = self._generate_label_function(data['train_anno'])
-        #     data['test_label'] = self._generate_label_function(data['test_anno'])
 
         return data
 
