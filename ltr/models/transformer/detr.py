@@ -8,7 +8,7 @@ from torch import nn
 
 import ltr.data.box_ops as box_ops
 
-from .res_backbone import build_backbone
+from .resnet_backbone import build_backbone
 from .transformer import build_transformer
 
 class DETR(nn.Module):
@@ -59,11 +59,12 @@ class DETR(nn.Module):
         batch_size = search_imgs.shape[0]
         target_sizes = search_imgs.shape[2:]  # [H, W]
         target_sizes = torch.cat(batch_size*[target_sizes]) # [batch_size x 2]
-        print(target_sizes.shape)
+        print('Song in detr.py, target_sizes.shape : ', target_sizes.shape)
 
-        features, pos = self.backbone(search_imgs)
-        src, mask = features[-1].decompose()
-        assert mask is not None
+        src, pos = self.backbone(search_imgs)
+        # src, mask = features[-1].decompose()
+        # assert mask is not None
+        mask = None
 
         template_features, _ = self.backbone(template_imgs)
         template_src, _ = template_features[-1].decompose()
@@ -148,13 +149,13 @@ class QueryProj(nn.Module):
         x = F.relu(self.fc(x))        # [batch, 256*5*5] -> [batch, 256]
         return torch.unsqueeze(x, 1)  # [batch, 1, 256]
 
-@model_constructor
-def build_tracker(backbone='resnet50',
+def build_tracker(backbone_name='resnet50',
+                  backbone_pretrained=True,
                   hidden_dim=256,
-                  position_embedding='sine',
-                  lr_backbone=1e-5,
-                  masks=False,
-                  dilation=False,
+                  position_embedding='learned',
+                  # lr_backbone=1e-5,
+                  # masks=False,
+                  # dilation=False,
                   dropout=0.1,
                   nheads=8,
                   dim_feedforward=2048,
@@ -174,17 +175,22 @@ def build_tracker(backbone='resnet50',
 
     the settings for the convolutional backbone :
         -backbone           : Name of the convolutional backbone to use
-        -masks              : Train segmentation head if the flag is provided
-        -dilation           : If true, we replace stride with dilation in the last convolutional block (DC5)
+        # -masks              : Train segmentation head if the flag is provided
+        # -dilation           : If true, we replace stride with dilation in the last convolutional block (DC5)
         -position_embedding : Type of positional embedding to use on top of the image features, chices=('sine', 'learned')
     '''
 
-    backbone = build_backbone(backbone=backbone,
+    # backbone = build_backbone(backbone=backbone,
+    #                           backbone_pretrained=True,
+    #                           hidden_dim=hidden_dim,
+    #                           position_embedding=position_embedding,
+    #                           lr_backbone=lr_backbone,
+    #                           masks=masks,
+    #                           dilation=dilation)
+    backbone = build_backbone(backbone_name=backbone_name,
+                              backbone_pretrained=backbone_pretrained,
                               hidden_dim=hidden_dim,
-                              position_embedding=position_embedding,
-                              lr_backbone=lr_backbone,
-                              masks=masks,
-                              dilation=dilation)
+                              position_embedding=position_embedding)
 
     transformer = build_transformer(hidden_dim=hidden_dim,
                                     dropout=dropout,

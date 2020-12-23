@@ -47,7 +47,7 @@ class Transformer(nn.Module):
         # query_embed = query_embed.unsqueeze(1).repeat(1, bs, 1) # Song query_embed is [N=1, batchsize, 256]
         query_embed = query_embed.permute(1, 0, 2) # [N=1, batchsize, 256]
         #
-        mask = mask.flatten(1)
+        # mask = mask.flatten(1) # Song : mask is None
 
         tgt = torch.zeros_like(query_embed)
         memory = self.encoder(src, src_key_padding_mask=mask, pos=pos_embed)
@@ -296,3 +296,13 @@ def build_transformer(hidden_dim=256, dropout=0.1, nheads=8, dim_feedforward=204
         normalize_before=pre_norm,
         return_intermediate_dec=True,
     )
+
+def _get_activation_fn(activation):
+    """Return an activation function given a string"""
+    if activation == "relu":
+        return F.relu
+    if activation == "gelu":
+        return F.gelu
+    if activation == "glu":
+        return F.glu
+    raise RuntimeError(F"activation should be relu/gelu, not {activation}.")

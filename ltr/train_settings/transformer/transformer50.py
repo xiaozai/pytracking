@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 import torch.optim as optim
 from ltr.dataset import Lasot, Got10k, TrackingNet, MSCOCOSeq
@@ -9,7 +10,7 @@ from ltr import actors
 from ltr.trainers import LTRTrainer
 import ltr.data.transforms as tfm
 from ltr import MultiGPU
-from ltr.models.transformer.criterion import SetCriterion
+from ltr.train_settings.transformer.criterion import SetCriterion
 
 def run(settings):
     settings.description = 'Default train settings for Transformer with ResNet50 as backbone.'
@@ -33,7 +34,7 @@ def run(settings):
     # Train datasets
     lasot_train = Lasot(settings.env.lasot_dir, split='train')
     got10k_train = Got10k(settings.env.got10k_dir, split='vottrain')
-    trackingnet_train = TrackingNet(settings.env.trackingnet_dir, set_ids=list(range(4)))
+    # trackingnet_train = TrackingNet(settings.env.trackingnet_dir, set_ids=list(range(4)))
     coco_train = MSCOCOSeq(settings.env.coco_dir)
 
     # Validation datasets
@@ -69,7 +70,7 @@ def run(settings):
                                                            template_output_sz=(112, 112)) # crop and resize template images with bbox
 
     # Train sampler and loader
-    dataset_train = sampler.TransformerSampler([lasot_train, got10k_train, trackingnet_train, coco_train], [0.25,1,1,1],
+    dataset_train = sampler.TransformerSampler([lasot_train, got10k_train, coco_train], [0.25,1,1],
                                         samples_per_epoch=26000, max_gap=30, num_test_frames=3, num_train_frames=3,
                                         processing=data_processing_train)
 
@@ -85,12 +86,13 @@ def run(settings):
                            shuffle=False, drop_last=True, epoch_interval=5, stack_dim=1)
 
     # Create network and actor
-    net = detr.build_tracker(backbone='resnet50',
+    net = detr.build_tracker(backbone_name='resnet50',
+                             backbone_pretrained=True,
                              hidden_dim=256,
-                             position_embedding='sine',
-                             lr_backbone=1e-5,
-                             masks=False,
-                             dilation=False,
+                             position_embedding='learned', # position_embedding='sine',
+                             # lr_backbone=1e-5,
+                             # masks=False,
+                             # dilation=False,
                              dropout=0.1,
                              nheads=8,
                              dim_feedforward=2048,
@@ -109,15 +111,29 @@ def run(settings):
     loss_weight = {'bbox': 1, 'iou': 1, 'conf': 100}
 
     actor = actors.TransformerActor(net=net, objective=objective, loss_weight=loss_weight)
+    #
+    # print('possible params')
+    # for n, p in net.named_parameters():
+    #     # print(n)
+    #     if "backbone.1" in n and p.requires_grad:
+    #         print(n)
 
     # Optimizer
+    # # 1) only optimize the weights for Transformer
+    # # 2) plus the weights for resnet in Backbone ???
+    # # 3) plus the weights for PosEmbedding in Backbone ??
     param_dicts = [
         {"params": [p for n, p in net.named_parameters() if "backbone" not in n and p.requires_grad]},
+        # {
+        #     "params": [p for n, p in net.named_parameters() if "backbone" in n and p.requires_grad],
+        #     "lr": 1e-5,
+        # },
         {
-            "params": [p for n, p in net.named_parameters() if "backbone" in n and p.requires_grad],
+            "params": [p for n, p in net.named_parameters() if "backbone.1" in n and p.requires_grad],
             "lr": 1e-5,
         },
     ]
+
     optimizer = torch.optim.AdamW(param_dicts, lr=1e-4, weight_decay=1e-4)
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 200)
