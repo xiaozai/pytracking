@@ -69,7 +69,7 @@ def run(settings):
                                                            joint_transform=transform_joint,
                                                            template_output_sz=(112, 112)) # crop and resize template images with bbox
 
-    # Train sampler and loader
+    # Train sampler and loader # Song, ignore Tracking-net currently
     dataset_train = sampler.TransformerSampler([lasot_train, got10k_train, coco_train], [0.25,1,1],
                                         samples_per_epoch=26000, max_gap=30, num_test_frames=3, num_train_frames=3,
                                         processing=data_processing_train)
