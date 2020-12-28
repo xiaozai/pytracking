@@ -119,7 +119,8 @@ class Lasot(BaseVideoDataset):
         class_name = seq_name.split('-')[0]
         vid_id = seq_name.split('-')[1]
 
-        return os.path.join(self.root, class_name, class_name + '-' + vid_id)
+        # return os.path.join(self.root, class_name, class_name + '-' + vid_id)
+        return os.path.join(self.root, class_name + '-' + vid_id)
 
     def get_sequence_info(self, seq_id):
         seq_path = self._get_sequence_path(seq_id)

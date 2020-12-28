@@ -691,11 +691,11 @@ def template_crop_and_resize(im, crop_bb, output_sz, mask=None):
     if crop_bb[2] < 1 or crop_bb[3] < 1:
         raise Exception('Too small bounding box.')
 
-    x1 = crop_bb[0]
-    x2 = crop_bb[0] + crop_bb[2]
+    x1 = int(crop_bb[0])
+    x2 = int(crop_bb[0] + crop_bb[2])
 
-    y1 = crop_bb[1]
-    y2 = crop_bb[1] + crop_bb[3]
+    y1 = int(crop_bb[1])
+    y2 = int(crop_bb[1] + crop_bb[3])
 
     # make sure x1y1, x2y2 are inside the images
     x1_pad = max(0, -x1)
@@ -755,10 +755,9 @@ def template_image_crop(frames, boxes, output_sz, masks=None):
         output_sz = (output_sz, output_sz)
 
     if masks is None:
-        frames_crop = [template_crop_and_resize(f, a, output_sz, mode) for f, a in zip(frames, boxes)]
-
+        frames_crop = [template_crop_and_resize(f, a, output_sz) for f, a in zip(frames, boxes)]
     else:
-        frame_crops_masks = [template_crop_and_resize(f, a, output_sz, mode, mask=m) for f, a, m in zip(frames, boxes, masks)]
+        frame_crops_masks = [template_crop_and_resize(f, a, output_sz, mask=m) for f, a, m in zip(frames, boxes, masks)]
 
         frames_crop, masks_crop = zip(*frame_crops_masks)
 
