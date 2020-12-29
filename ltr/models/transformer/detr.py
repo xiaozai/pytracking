@@ -74,7 +74,7 @@ class DETR(nn.Module):
         # target_sizes = torch.cat(batch_size*[target_sizes]) # [batch_size x 2]
         target_sizes = target_sizes.repeat(batch_size, 1)   # [batch_size x 2]
         # print('Song in detr.py, target_sizes.shape : ', target_sizes.shape)
-
+        print(search_imgs)
         src, pos = self.backbone(search_imgs)
         # src, mask = features[-1].decompose()
         # assert mask is not None
