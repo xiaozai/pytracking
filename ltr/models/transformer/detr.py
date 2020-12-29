@@ -42,7 +42,7 @@ class DETR(nn.Module):
     def forward(self, search_imgs, template_imgs):
         """ The forward expects a NestedTensor, which consists of:
                - template_imgs : batched images, of shape [batch_size x 3 x H x W], which are the template branch
-               - template_bb   : batched bounding boxes, of shape [batch_size x 4]
+               # - template_bb   : batched bounding boxes, of shape [batch_size x 4]
 
                - search_imgs : batched test images , of shape [batch_size x 3 x H x W], which are the test branch
                                is a cropped squred images, they have the same shape
@@ -56,9 +56,23 @@ class DETR(nn.Module):
                                relative to the size of each individual image (disregarding possible padding).
                                See PostProcess for information on how to retrieve the unnormalized bounding box.
         """
+        if len(search_imgs.shape) == 5:
+            num_train_imgs, batch_size, C, H, W = search_imgs.shape
+            search_imgs = search_imgs.view(num_train_imgs*batch_size, C, H, W)
+
+            num_test_imgs, batch_size, C, H, W = template_imgs.shape
+            template_imgs = template_imgs.view(num_test_imgs*batch_size, C, H, W)
+        # search_imgs = torch.squeeze(search_imgs)        # [num_train_imgs, batch_size, C, H, W] => [batch_size, C, H, W]
+        # template_imgs = torch.squeeze(template_imgs)
+        print('Song in detr.py search_imgs and template shape = ', search_imgs.shape, template_imgs.shape)
         batch_size = search_imgs.shape[0]
-        target_sizes = search_imgs.shape[2:]  # [H, W]
-        target_sizes = torch.cat(batch_size*[target_sizes]) # [batch_size x 2]
+        target_sizes = search_imgs.shape[-2:]  # [H, W] [288, 288]
+        print('Song in detr.py, target_sizes : ', target_sizes)
+        target_sizes = torch.unsqueeze(torch.tensor(target_sizes), 0) # [1 x 2]
+
+        print('Song in detr.py, target_sizes : ', target_sizes, target_sizes.shape)
+        # target_sizes = torch.cat(batch_size*[target_sizes]) # [batch_size x 2]
+        target_sizes = target_sizes.repeat(batch_size, 1)   # [batch_size x 2]
         print('Song in detr.py, target_sizes.shape : ', target_sizes.shape)
 
         src, pos = self.backbone(search_imgs)

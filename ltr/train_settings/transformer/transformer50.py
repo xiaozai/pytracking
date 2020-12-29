@@ -71,7 +71,7 @@ def run(settings):
 
     # Train sampler and loader # Song, ignore Tracking-net currently
     dataset_train = sampler.TransformerSampler([lasot_train, got10k_train, coco_train], [0.25,1,1],
-                                        samples_per_epoch=26000, max_gap=30, num_test_frames=3, num_train_frames=3,
+                                        samples_per_epoch=26000, max_gap=30, num_test_frames=1, num_train_frames=1,
                                         processing=data_processing_train)
 
     loader_train = LTRLoader('train', dataset_train, training=True, batch_size=settings.batch_size, num_workers=settings.num_workers,
@@ -79,7 +79,7 @@ def run(settings):
 
     # Validation samplers and loaders
     dataset_val = sampler.TransformerSampler([got10k_val], [1], samples_per_epoch=5000, max_gap=30,
-                                      num_test_frames=3, num_train_frames=3,
+                                      num_test_frames=1, num_train_frames=1,
                                       processing=data_processing_val)
 
     loader_val = LTRLoader('val', dataset_val, training=False, batch_size=settings.batch_size, num_workers=settings.num_workers,

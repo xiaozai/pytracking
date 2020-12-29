@@ -56,7 +56,7 @@ class LTRTrainer(BaseTrainer):
 
             data['epoch'] = self.epoch
             data['settings'] = self.settings
-
+            # print('song in ltr_trainer.py: data:', data)
             # forward pass
             loss, stats = self.actor(data)
 

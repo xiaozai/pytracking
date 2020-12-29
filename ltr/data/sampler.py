@@ -182,6 +182,7 @@ class TrackingSampler(torch.utils.data.Dataset):
                                'dataset': dataset.get_name(),
                                'test_class': meta_obj_test.get('object_class_name')})
 
+        # print('Song in sampler.py TransformerSampler, train_frames.shape', train_frames.shape, test_frames.shape)
         return self.processing(data)
 
 

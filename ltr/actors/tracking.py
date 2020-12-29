@@ -81,7 +81,7 @@ class TransformerActor(BaseActor):
         """
         args:
             data - The input data, should contain the fields
-                    'train_images', 'test_images', 'test_anno'.
+                    'train_images', 'test_images', 'test_anno'. Song : so the size of the train_images ???
 
         returns:
             loss   - the training loss
