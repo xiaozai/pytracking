@@ -149,7 +149,7 @@ def plot_prob_map(s, data, depth_mask, prob_map):
         s : train or test
         data : 'train_images' and 'test_images'
      '''
-    print(s)
+    # print(s)
     fig, ((ax1, ax2), (ax3, ax4), (ax5, ax6)) = plt.subplots(3,2)
     rgb = data[s + '_images'][0].numpy() # (3, 288, 288)
     rgb = np.transpose(rgb, (1, 2, 0))    # (288, 288, 3) normalized rgb image
@@ -689,7 +689,7 @@ def template_crop_and_resize(im, crop_bb, output_sz, mask=None):
     im_w = im.shape[1]
 
     if crop_bb[2] < 1 or crop_bb[3] < 1:
-        print(crop_bb)
+        print('current crop_bb: ', crop_bb)
         raise Exception('Too small bounding box.')
 
     x1 = int(crop_bb[0])

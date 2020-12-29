@@ -14,8 +14,8 @@ from ltr.train_settings.transformer.criterion import SetCriterion
 
 def run(settings):
     settings.description = 'Default train settings for Transformer with ResNet50 as backbone.'
-    settings.batch_size = 16
-    settings.num_workers = 4
+    settings.batch_size = 32
+    settings.num_workers = 8
     settings.multi_gpu = False
     settings.print_interval = 1
     settings.normalize_mean = [0.485, 0.456, 0.406]
@@ -125,4 +125,4 @@ def run(settings):
 
     trainer = LTRTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
 
-    trainer.train(50, load_latest=True, fail_safe=True)
+    trainer.train(200, load_latest=True, fail_safe=True)

@@ -111,7 +111,8 @@ class TrackingNet(BaseVideoDataset):
     def get_sequence_info(self, seq_id):
         bbox = self._read_bb_anno(seq_id)
 
-        valid = (bbox[:, 2] > 0) & (bbox[:, 3] > 0)
+        # valid = (bbox[:, 2] > 0) & (bbox[:, 3] > 0)
+        valid = (bbox[:, 2] > 1.0) & (bbox[:, 3] > 1.0)
         visible = valid.clone().byte()
         return {'bbox': bbox, 'valid': valid, 'visible': visible}
 
