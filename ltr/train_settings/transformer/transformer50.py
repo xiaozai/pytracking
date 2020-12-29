@@ -110,19 +110,13 @@ def run(settings):
 
     actor = actors.TransformerActor(net=net, objective=objective, loss_weight=loss_weight)
 
-    # Optimizer, transformer + ResNet
+    # Optimizer, transformer + pos embedding (backbone.0 is the ResNet, backbone.1 is the pos embedding)
     param_dicts = [
         {"params": [p for n, p in net.named_parameters() if "backbone" not in n and p.requires_grad]},
-        # {
-        #     "params": [p for n, p in net.named_parameters() if "backbone" in n and p.requires_grad],
-        #     "lr": 1e-5,
-        # },
-
-        # ResNet50
-        # {
-        #     "params": [p for n, p in net.named_parameters() if "backbone.1" in n and p.requires_grad],
-        #     "lr": 1e-5,
-        # },
+        {
+            "params": [p for n, p in net.named_parameters() if "backbone.1" in n and p.requires_grad],
+            "lr": 1e-5,
+        },
     ]
 
     optimizer = torch.optim.AdamW(param_dicts, lr=1e-4, weight_decay=1e-4)

@@ -9,6 +9,9 @@
 #SBATCH --partition=gpu --gres=gpu:1
 
 module load CUDA/10.0
+module load fgci-common
+module load ninja/1.9.0
+
 conda activate pytracking
 cd /home/yans/pytracking/ltr/
 python run_training.py transformer transformer50
