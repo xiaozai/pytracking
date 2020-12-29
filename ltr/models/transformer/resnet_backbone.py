@@ -129,10 +129,10 @@ class Joiner(nn.Sequential):
 
     def forward(self, x):
         xs = self[0](x) # resnet50 features
-        print('Song in Joiner, xs.shape : ', xs.shape)
+        # print('Song in Joiner, xs.shape : ', xs.shape)
         # pos = self[1](xs).to(xs.tensors.dtype)  # # position encoding
         pos = self[1](xs).to(xs.dtype)  # # position encoding
-        print('Song in Joiner, pos.shape : ', pos.shape)
+        # print('Song in Joiner, pos.shape : ', pos.shape)
         # out: List[NestedTensor] = []
         # pos = []
         # for name, x in xs.items():

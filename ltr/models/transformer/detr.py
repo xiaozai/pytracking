@@ -64,16 +64,16 @@ class DETR(nn.Module):
             template_imgs = template_imgs.view(num_test_imgs*batch_size, C, H, W)
         # search_imgs = torch.squeeze(search_imgs)        # [num_train_imgs, batch_size, C, H, W] => [batch_size, C, H, W]
         # template_imgs = torch.squeeze(template_imgs)
-        print('Song in detr.py search_imgs and template shape = ', search_imgs.shape, template_imgs.shape)
+        # print('Song in detr.py search_imgs and template shape = ', search_imgs.shape, template_imgs.shape)
         batch_size = search_imgs.shape[0]
         target_sizes = search_imgs.shape[-2:]  # [H, W] [288, 288]
-        print('Song in detr.py, target_sizes : ', target_sizes)
+        # print('Song in detr.py, target_sizes : ', target_sizes)
         target_sizes = torch.unsqueeze(torch.tensor(target_sizes), 0) # [1 x 2]
 
-        print('Song in detr.py, target_sizes : ', target_sizes, target_sizes.shape)
+        # print('Song in detr.py, target_sizes : ', target_sizes, target_sizes.shape)
         # target_sizes = torch.cat(batch_size*[target_sizes]) # [batch_size x 2]
         target_sizes = target_sizes.repeat(batch_size, 1)   # [batch_size x 2]
-        print('Song in detr.py, target_sizes.shape : ', target_sizes.shape)
+        # print('Song in detr.py, target_sizes.shape : ', target_sizes.shape)
 
         src, pos = self.backbone(search_imgs)
         # src, mask = features[-1].decompose()
