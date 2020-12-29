@@ -89,7 +89,7 @@ class TransformerActor(BaseActor):
         """
         # Run network
         prediction = self.net(template_imgs=data['train_images'], search_imgs=data['test_images'])
-
+    
         loss_dict = self.objective(prediction, data['test_anno'])
 
         # Total loss

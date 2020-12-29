@@ -689,6 +689,7 @@ def template_crop_and_resize(im, crop_bb, output_sz, mask=None):
     im_w = im.shape[1]
 
     if crop_bb[2] < 1 or crop_bb[3] < 1:
+        print(crop_bb)
         raise Exception('Too small bounding box.')
 
     x1 = int(crop_bb[0])

@@ -128,19 +128,13 @@ class Joiner(nn.Sequential):
         super().__init__(backbone, position_embedding)
 
     def forward(self, x):
-        xs = self[0](x) # resnet50 features
-        # print('Song in Joiner, xs.shape : ', xs.shape)
-        # pos = self[1](xs).to(xs.tensors.dtype)  # # position encoding
-        pos = self[1](xs).to(xs.dtype)  # # position encoding
-        # print('Song in Joiner, pos.shape : ', pos.shape)
-        # out: List[NestedTensor] = []
-        # pos = []
-        # for name, x in xs.items():
-        #     out.append(x)
-        #     # position encoding
-        #     pos.append(self[1](x).to(x.tensors.dtype))
+        xs = self[0](x)                               # resnet50 features
+        out, pos = [], []
+        for name, feat in xs.items():
+            out.append(feat)                          # # features from ResNet50 layer4 : [batch x 2048 x 9 x 9]
+            pos.append(self[1](feat).to(feat.dtype))  # # position encoding
 
-        return xs, pos
+        return out[-1], pos[-1]
 
 
 # def build_backbone(backbone='resnet50', backbone_pretrained=True, hidden_dim=256, position_embedding='learn',

@@ -14,8 +14,8 @@ from ltr.train_settings.transformer.criterion import SetCriterion
 
 def run(settings):
     settings.description = 'Default train settings for Transformer with ResNet50 as backbone.'
-    settings.batch_size = 10
-    settings.num_workers = 8
+    settings.batch_size = 16
+    settings.num_workers = 4
     settings.multi_gpu = False
     settings.print_interval = 1
     settings.normalize_mean = [0.485, 0.456, 0.406]
@@ -104,34 +104,25 @@ def run(settings):
     if settings.multi_gpu:
         net = MultiGPU(net, dim=1)
 
-    # objective = {'iou': nn.MSELoss(), 'test_clf': ltr_losses.LBHinge(threshold=settings.hinge_threshold)}
-    # objective = {'bboxes': SetCriterion()} # Song wants the giou loss in Detr
     objective = SetCriterion(losses=['boxes_iou_conf'])
 
-    loss_weight = {'bbox': 1, 'iou': 1, 'conf': 100}
+    loss_weight = {'bbox': 1, 'iou': 100, 'conf': 100}
 
     actor = actors.TransformerActor(net=net, objective=objective, loss_weight=loss_weight)
-    #
-    # print('possible params')
-    # for n, p in net.named_parameters():
-    #     # print(n)
-    #     if "backbone.1" in n and p.requires_grad:
-    #         print(n)
 
-    # Optimizer
-    # # 1) only optimize the weights for Transformer
-    # # 2) plus the weights for resnet in Backbone ???
-    # # 3) plus the weights for PosEmbedding in Backbone ??
+    # Optimizer, transformer + ResNet
     param_dicts = [
         {"params": [p for n, p in net.named_parameters() if "backbone" not in n and p.requires_grad]},
         # {
         #     "params": [p for n, p in net.named_parameters() if "backbone" in n and p.requires_grad],
         #     "lr": 1e-5,
         # },
-        {
-            "params": [p for n, p in net.named_parameters() if "backbone.1" in n and p.requires_grad],
-            "lr": 1e-5,
-        },
+
+        # ResNet50
+        # {
+        #     "params": [p for n, p in net.named_parameters() if "backbone.1" in n and p.requires_grad],
+        #     "lr": 1e-5,
+        # },
     ]
 
     optimizer = torch.optim.AdamW(param_dicts, lr=1e-4, weight_decay=1e-4)

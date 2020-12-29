@@ -31,7 +31,8 @@ class DETR(nn.Module):
         super().__init__()
 
         self.transformer = transformer
-        hidden_dim = transformer.d_model                                        # 512
+        hidden_dim = transformer.d_model                                        # 256
+        # print('Song hidden_dim : ', hidden_dim)
         self.conf_embed = MLP(hidden_dim, hidden_dim, 1, 3)                     # Song added
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
@@ -58,39 +59,28 @@ class DETR(nn.Module):
         """
         if len(search_imgs.shape) == 5:
             num_train_imgs, batch_size, C, H, W = search_imgs.shape
-            search_imgs = search_imgs.view(num_train_imgs*batch_size, C, H, W)
+            search_imgs = search_imgs.view(num_train_imgs*batch_size, C, H, W).clone().requires_grad_()
 
             num_test_imgs, batch_size, C, H, W = template_imgs.shape
-            template_imgs = template_imgs.view(num_test_imgs*batch_size, C, H, W)
-        # search_imgs = torch.squeeze(search_imgs)        # [num_train_imgs, batch_size, C, H, W] => [batch_size, C, H, W]
-        # template_imgs = torch.squeeze(template_imgs)
-        # print('Song in detr.py search_imgs and template shape = ', search_imgs.shape, template_imgs.shape)
-        batch_size = search_imgs.shape[0]
-        target_sizes = search_imgs.shape[-2:]  # [H, W] [288, 288]
-        # print('Song in detr.py, target_sizes : ', target_sizes)
-        target_sizes = torch.unsqueeze(torch.tensor(target_sizes), 0) # [1 x 2]
+            template_imgs = template_imgs.view(num_test_imgs*batch_size, C, H, W).clone().requires_grad_() 
 
-        # print('Song in detr.py, target_sizes : ', target_sizes, target_sizes.shape)
-        # target_sizes = torch.cat(batch_size*[target_sizes]) # [batch_size x 2]
-        target_sizes = target_sizes.repeat(batch_size, 1)   # [batch_size x 2]
-        # print('Song in detr.py, target_sizes.shape : ', target_sizes.shape)
-        print(search_imgs)
-        src, pos = self.backbone(search_imgs)
-        # src, mask = features[-1].decompose()
-        # assert mask is not None
-        mask = None
+        target_sizes = torch.unsqueeze(torch.tensor(search_imgs.shape[-2:]), 0) # [1 x 2]
+        target_sizes = target_sizes.repeat(search_imgs.shape[0], 1)             # [batch_size x 2]
+        target_sizes = target_sizes.cuda()
 
-        template_features, _ = self.backbone(template_imgs)
-        template_src, _ = template_features[-1].decompose()
+        search_features, search_pos = self.backbone(search_imgs)
+        search_mask = None # Song : we don't use the mask yet
 
-        hs = self.transformer(self.input_proj(src), mask, self.query_proj(template_src), pos[-1])[0]
+        template_features, template_pos = self.backbone(template_imgs)
 
+        hs = self.transformer(self.input_proj(search_features), search_mask, self.query_proj(template_features), search_pos)[0]
+        # print('Song in detr.py: hs.shape = ', hs.shape)                       # [6, batch, 1, 256 ] ??
         outputs_conf = self.conf_embed(hs)                                      # Song added
         outputs_coord = self.bbox_embed(hs).sigmoid()                           # Song why do not output the [x,y,w,h] directly ? they are same
 
         out = {'pred_conf': outputs_conf[-1], 'pred_boxes': outputs_coord[-1]}
 
-        out = postprocessors(out, target_sizes) # [x,y,w,h]
+        out = self.postprocessors(out, target_sizes) # [x,y,w,h]
 
         return out
 
@@ -107,19 +97,25 @@ class PostProcess(nn.Module):
                           For evaluation, this must be the original image size (before any data augmentation)
                           For visualization, this should be the image size after data augment, but before padding
         """
-        scores, out_bbox = outputs['pred_conf'], outputs['pred_boxes']
-
-        assert len(out_conf) == len(target_sizes)
+        scores, boxes = outputs['pred_conf'], outputs['pred_boxes']
+        # print('song len(scores), len(out_bbox) : ', len(scores), len(out_bbox))
+        assert len(scores) == len(target_sizes)
         # assert target_sizes.shape[1] == 2
 
-        boxes = box_ops.box_cxcywh_to_xywh(out_bbox)
+        # boxes = box_ops.box_cxcywh_to_xywh(out_bbox) # Song : assume that, the network predict (x, y, w, h)
 
         # and from relative [0, 1] to absolute [0, height] coordinates
-        img_h, img_w = target_sizes.unbind(1) # img_h : [batch_size, ], img_w : [batch_size, ]
+        img_h, img_w = target_sizes.unbind(1)                                   # img_h : [batch_size, ], img_w : [batch_size, ]
         scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
         boxes = boxes * scale_fct[:, None, :]
 
-        results = [{'scores': s,  'boxes': b} for s, b in zip(scores, boxes)]
+        # scores = torch.clamp(scores, min=0.0, max=1.0) # Song Not differentiable at 0.0 and 1.0
+
+        batch_size = target_sizes.shape[0]
+        boxes = boxes.view(batch_size, -1).clone()
+        scores = scores.view(batch_size).clone()
+
+        results = {'pred_conf': scores, 'pred_boxes': boxes}
 
         return results
 
@@ -147,6 +143,8 @@ class QueryProj(nn.Module):
 
     Probelm, how to stack images with different shapes ? since the bbox are different ?
         - the naive way, to resize + pooling
+
+    Song : If we resize the cropped template images, we make fix the number of the dimmensions, and remove the AdaptiveAvgPool2d ???
     """
     def __init__(self, input_dim, output_dim):
         super().__init__()

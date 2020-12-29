@@ -27,29 +27,39 @@ class SetCriterion(nn.Module):
         """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
            # # targets dicts must contain the key "boxes" containing a tensor of dim [nb_target_boxes, 4]
            # # The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
+
+
            Song : The target boxes are in format (x, y, w, h)
+           Song : The predicted boxes are in format (x, y, w, h)
+
+           box_ops.generalized_box_iou requres a format (x0, y0, x1, y1) !!!!
         """
+
         assert 'pred_boxes' in outputs
 
-        src_boxes = outputs['pred_boxes']
-        # target_boxes = torch.cat([t['boxes'] for t in zip(targets)], dim=0)
-
-        loss_bbox = F.l1_loss(src_boxes, targets, reduction='none')
-
         losses = {}
+
+        prediction = outputs['pred_boxes'] # (x, y, w, h)
+
+        targets = targets.view(prediction.shape[0], -1).clone().requires_grad_() # Song : fix this in the data loade
+
+        loss_bbox = F.l1_loss(box_ops.box_xywh_to_cxcywh(prediction),
+                              box_ops.box_xywh_to_cxcywh(targets),
+                              reduction='none')
+
         losses['loss_bbox'] = loss_bbox.sum()
 
-        # target_confidences = torch.diag(box_ops.generalized_box_iou(
-        #     box_ops.box_cxcywh_to_xyxy(src_boxes),
-        #     box_ops.box_cxcywh_to_xyxy(target_boxes)))
-        target_confidences = torch.diag(box_ops.generalized_box_iou(src_boxes, targets))
+        target_confidences = torch.diag(box_ops.generalized_box_iou(
+                                          box_ops.box_xywh_to_xyxy(prediction),
+                                          box_ops.box_xywh_to_xyxy(targets)))
 
         loss_giou = 1 - target_confidences
         losses['loss_giou'] = loss_giou.sum()
 
         # Song : use the giou as the confidence
-        src_confidences = outputs['pred_conf']
-        loss_confidence = F.mse_loss(src_confidences, target_confidences)
+        pred_confidences = outputs['pred_conf']
+
+        loss_confidence = F.mse_loss(pred_confidences, target_confidences)
         losses['loss_conf'] = loss_confidence.sum()
 
         return losses
@@ -68,7 +78,8 @@ class SetCriterion(nn.Module):
              targets: list of dicts, such that len(targets) == batch_size.
                       The expected keys in each dict depends on the losses applied, see each loss' doc
         """
-        outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs'}
+
+        # outputs_without_aux = {k: v for k, v in outputs.items() if k != 'aux_outputs'}
 
         losses = {}
         for loss in self.losses:
