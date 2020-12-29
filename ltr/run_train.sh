@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH -J transformer
+#SBATCH --job-name=TrackTransformer
 #SBATCH --output=/home/yans/pytracking/ltr/logs/log-output.txt
 #SBATCH --error=/home/yans/pytracking/ltr/logs/log-error.txt
 #SBATCH --ntasks=2
@@ -11,9 +11,11 @@
 module load CUDA/10.0
 module load fgci-common
 module load ninja/1.9.0
+# module load opencv/4.1.0-openmpi-python3
+module load all/libjpeg-turbo/2.0.0-GCCcore-7.3.0
 
-conda activate pytracking
-cd /home/yans/pytracking/ltr/
+source activate pytracking
+
 python run_training.py transformer transformer50
 
-conda deactivate
+conda deactivate pytracking

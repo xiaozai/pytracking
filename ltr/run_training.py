@@ -4,6 +4,7 @@ import argparse
 import importlib
 import multiprocessing
 import cv2 as cv
+import torch
 import torch.backends.cudnn
 
 env_path = os.path.join(os.path.dirname(__file__), '..')

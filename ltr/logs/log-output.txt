@@ -1,0 +1,7 @@
+Training:  transformer  transformer50
+loading annotations into memory...
+Done (t=9.72s)
+creating index...
+index created!
+/home/yans/pytracking-models/ltr/checkpoints/ltr/transformer/transformer50/DETR_ep*.pth
+No matching checkpoint file found
