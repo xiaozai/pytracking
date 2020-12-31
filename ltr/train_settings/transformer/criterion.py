@@ -42,7 +42,7 @@ class SetCriterion(nn.Module):
         prediction = outputs['pred_boxes'] # (x, y, w, h)
 
         targets = targets.view(prediction.shape[0], -1).clone().requires_grad_() # Song : fix this in the data loade
-
+        print('song criterion: target and pred : ', targets.shape, prediction.shape)
         loss_bbox = F.l1_loss(box_ops.box_xywh_to_cxcywh(prediction),
                               box_ops.box_xywh_to_cxcywh(targets),
                               reduction='none')
@@ -64,9 +64,53 @@ class SetCriterion(nn.Module):
 
         return losses
 
+    def loss_boxes_iou(self, outputs, targets):
+        """Compute the losses related to the bounding boxes, the L1 regression loss and the GIoU loss
+           # # targets dicts must contain the key "boxes" containing a tensor of dim [nb_target_boxes, 4]
+           # # The target boxes are expected in format (center_x, center_y, w, h), normalized by the image size.
+
+
+           Song : The target boxes are in format (x, y, w, h)
+           Song : The predicted boxes are in format (x, y, w, h)
+
+           box_ops.generalized_box_iou requres a format (x0, y0, x1, y1) !!!!
+        """
+
+        assert 'pred_boxes' in outputs
+
+        losses = {}
+
+        prediction = outputs['pred_boxes'] # (x, y, w, h)
+        # print('song criterion: target and pred : ', targets.shape, prediction.shape) # [16x4], [16 x 4]
+
+        # targets = targets.view(prediction.shape[0], -1).clone().requires_grad_() # Song : fix this in the data loade
+        targets = targets.requires_grad_()
+
+        # loss_bbox = F.l1_loss(box_ops.box_xywh_to_cxcywh(prediction),
+        #                       box_ops.box_xywh_to_cxcywh(targets),
+        #                       reduction='none')
+        #
+        # losses['loss_bbox'] = loss_bbox.sum()
+
+        target_confidences = torch.diag(box_ops.generalized_box_iou(
+                                        box_ops.box_xywh_to_xyxy(prediction),
+                                        box_ops.box_xywh_to_xyxy(targets)))
+
+        loss_giou = 1 - target_confidences
+        losses['loss_giou'] = loss_giou.sum()
+
+        # Song : use the giou as the confidence
+        # pred_confidences = outputs['pred_conf']
+        #
+        # loss_confidence = F.mse_loss(pred_confidences, target_confidences)
+        # losses['loss_conf'] = loss_confidence.sum()
+
+        return losses
+
     def get_loss(self, loss, outputs, targets, **kwargs):
         loss_map = {
             'boxes_iou_conf': self.loss_boxes_iou_conf,
+            'boxes_iou' : self.loss_boxes_iou
         }
         assert loss in loss_map, f'do you really want to compute {loss} loss?'
         return loss_map[loss](outputs, targets, **kwargs)

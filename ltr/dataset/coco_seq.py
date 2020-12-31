@@ -114,7 +114,7 @@ class MSCOCOSeq(BaseVideoDataset):
         mask = torch.Tensor(self.coco_set.annToMask(anno)).unsqueeze(dim=0)
 
         # valid = (bbox[:, 2] > 0) & (bbox[:, 3] > 0)
-        valid = (bbox[:, 2] > 1.0) & (bbox[:, 3] > 1.0)
+        valid = (bbox[:, 2] > 5.0) & (bbox[:, 3] > 5.0)
         visible = valid.clone().byte()
 
         return {'bbox': bbox, 'mask': mask, 'valid': valid, 'visible': visible}

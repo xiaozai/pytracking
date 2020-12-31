@@ -151,7 +151,7 @@ class Got10k(BaseVideoDataset):
         bbox = self._read_bb_anno(seq_path)
 
         # valid = (bbox[:, 2] > 0) & (bbox[:, 3] > 0)
-        valid = (bbox[:, 2] > 1.0) & (bbox[:, 3] > 1.0)
+        valid = (bbox[:, 2] > 5.0) & (bbox[:, 3] > 5.0)
         visible, visible_ratio = self._read_target_visible(seq_path)
         visible = visible & valid.byte()
 

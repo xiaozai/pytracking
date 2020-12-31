@@ -181,7 +181,7 @@ class ToTensor(TransformBase):
         if image.ndim == 2:
             image = image[:, :, None]
 
-        image = torch.from_numpy(image.transpose((2, 0, 1)))
+        image = torch.from_numpy(image.transpose((2, 0, 1))) # (C, H, W)
         # backward compatibility
         if isinstance(image, torch.ByteTensor):
             return image.float().div(255)

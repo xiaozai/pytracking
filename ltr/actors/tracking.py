@@ -89,7 +89,7 @@ class TransformerActor(BaseActor):
         """
         # Run network
         prediction = self.net(template_imgs=data['train_images'], search_imgs=data['test_images'])
-    
+
         loss_dict = self.objective(prediction, data['test_anno'])
 
         # Total loss
@@ -100,6 +100,43 @@ class TransformerActor(BaseActor):
                  'Loss/bbox' : loss_dict['loss_bbox'].item(),
                  'Loss/iou'  : loss_dict['loss_giou'].item(),
                  'Loss/conf' : loss_dict['loss_conf'].item()}
+
+        return loss, stats
+
+class TransformerROIActor(BaseActor):
+    """Actor for training the DiMP network."""
+    def __init__(self, net, objective, loss_weight=None):
+        super().__init__(net, objective)
+        if loss_weight is None:
+            loss_weight = {'bbox': 1.0, 'iou': 1.0} # , 'conf': 1.0}
+        self.loss_weight = loss_weight
+
+    def __call__(self, data):
+        """
+        args:
+            data - The input data, should contain the fields
+                    'train_images', 'test_images', 'test_anno'. Song : so the size of the train_images ???
+
+        returns:
+            loss   - the training loss
+            stats  - dict containing detailed losses
+        """
+        # Run network
+        prediction = self.net(search_imgs=data['test_images'], template_imgs=data['train_images'], template_bb=data['train_anno'])
+
+        loss_dict = self.objective(prediction, data['test_anno'])
+
+        # Total loss
+        # loss = self.loss_weight['bbox'] * loss_dict['loss_bbox'] + self.loss_weight['iou'] * loss_dict['loss_giou'] # + self.loss_weight['conf'] * loss_dict['loss_conf']
+        loss = self.loss_weight['iou'] * loss_dict['loss_giou'] # + self.loss_weight['conf'] * loss_dict['loss_conf']
+
+
+        # Log stats
+        stats = {'Loss/total': loss.item(),
+                 # 'Loss/bbox' : loss_dict['loss_bbox'].item(),
+                 'Loss/iou'  : loss_dict['loss_giou'].item(),
+                 # 'Loss/conf' : loss_dict['loss_conf'].item()
+                 }
 
         return loss, stats
 

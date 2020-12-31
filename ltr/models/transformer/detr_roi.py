@@ -10,8 +10,9 @@ import ltr.data.box_ops as box_ops
 
 from .resnet_backbone import build_backbone
 from .transformer import build_transformer
+from ltr.external.PreciseRoIPooling.pytorch.prroi_pool import PrRoIPool2D
 
-class DETR(nn.Module):
+class DETR_ROI(nn.Module):
     """
         Song : This is the DETR module that performs object tracking
 
@@ -32,17 +33,21 @@ class DETR(nn.Module):
 
         self.transformer = transformer
         hidden_dim = transformer.d_model                                        # 256
-        self.conf_embed = MLP(hidden_dim, hidden_dim, 1, 3)                     # Song added
+        # self.conf_embed = MLP(hidden_dim, hidden_dim, 1, 3)                     # Song added
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
-        self.query_proj = QueryProj(backbone.num_channels, hidden_dim)          # Song added, project Template features into query
+        roi_windowsize = 3
+        self.prroi_pool = PrRoIPool2D(roi_windowsize, roi_windowsize, 1/32) # 5, 5, ?
+        self.query_proj = QueryProj(backbone.num_channels, hidden_dim, roi_windowsize) # Song added, project Template features into query
         self.backbone = backbone
         self.postprocessors = postprocessors
 
-    def forward(self, search_imgs, template_imgs):
+
+
+    def forward(self, search_imgs, template_imgs, template_bb):
         """ The forward expects a NestedTensor, which consists of:
                - template_imgs : batched images, of shape [batch_size x 3 x H x W], which are the template branch
-               # - template_bb   : batched bounding boxes, of shape [batch_size x 4]
+               - template_bb   : batched bounding boxes, of shape [batch_size x 4], (x,y,w,h)
 
                - search_imgs : batched test images , of shape [batch_size x 3 x H x W], which are the test branch
                                is a cropped squred images, they have the same shape
@@ -57,6 +62,9 @@ class DETR(nn.Module):
                                See PostProcess for information on how to retrieve the unnormalized bounding box.
         """
         if len(search_imgs.shape) == 5:
+            '''
+            Song : in the processing , if the mode is the "sequence", it will return [num_test_imgs, batch_size, 3, H, W]
+            '''
             num_train_imgs, batch_size, C, H, W = search_imgs.shape
             search_imgs = search_imgs.view(num_train_imgs*batch_size, C, H, W).clone().requires_grad_()
 
@@ -70,14 +78,27 @@ class DETR(nn.Module):
         search_features, search_pos = self.backbone(search_imgs)
         search_mask = None # Song : we don't use the mask yet
 
-        template_features, template_pos = self.backbone(template_imgs)
+        # PrROIPooling on template branch
+        template_features, template_pos = self.backbone(template_imgs)           # [batch, 2048, 9, 9]
 
-        hs = self.transformer(self.input_proj(search_features), search_mask, self.query_proj(template_features), search_pos)[0]
-        # print('Song in detr.py: hs.shape = ', hs.shape)                       # [6, batch, 1, 256 ] ??
-        outputs_conf = self.conf_embed(hs)                                      # Song added
+        # Add batch_index to rois, bb is [batch, 4]
+        batch_size = template_bb.shape[0]
+        batch_index = torch.arange(batch_size, dtype=torch.float32).reshape(-1, 1).to(template_bb.device)
+        # input bb is in format xywh, convert it to x0y0x1y1 format
+        bb = template_bb.clone()
+        bb[:, 2:4] = bb[:, 0:2] + bb[:, 2:4]
+        roi_bb = torch.cat((batch_index, bb), dim=1)
+        template_roi = self.prroi_pool(template_features, roi_bb)               # [batch, 2048, roi_windowsize, roi_windowsize]
+
+
+        # Transformer
+        hs = self.transformer(self.input_proj(search_features), search_mask, self.query_proj(template_roi), search_pos)[0]
+
+        # outputs_conf = self.conf_embed(hs)                                    # Song added
         outputs_coord = self.bbox_embed(hs).sigmoid()                           # Song why do not output the [x,y,w,h] directly ? they are same
 
-        out = {'pred_conf': outputs_conf[-1], 'pred_boxes': outputs_coord[-1]}
+        # out = {'pred_conf': outputs_conf[-1], 'pred_boxes': outputs_coord[-1]}
+        out = {'pred_boxes': outputs_coord[-1]}
 
         out = self.postprocessors(out, target_sizes) # [x,y,w,h]
 
@@ -96,9 +117,10 @@ class PostProcess(nn.Module):
                           For evaluation, this must be the original image size (before any data augmentation)
                           For visualization, this should be the image size after data augment, but before padding
         """
-        scores, boxes = outputs['pred_conf'], outputs['pred_boxes']
-        # print('song len(scores), len(out_bbox) : ', len(scores), len(out_bbox))
-        assert len(scores) == len(target_sizes)
+        # scores, boxes = outputs['pred_conf'], outputs['pred_boxes']
+        boxes = outputs['pred_boxes']
+
+        # assert len(scores) == len(target_sizes)
         # assert target_sizes.shape[1] == 2
 
         # boxes = box_ops.box_cxcywh_to_xywh(out_bbox) # Song : assume that, the network predict (x, y, w, h)
@@ -108,13 +130,12 @@ class PostProcess(nn.Module):
         scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
         boxes = boxes * scale_fct[:, None, :]
 
-        # scores = torch.clamp(scores, min=0.0, max=1.0) # Song Not differentiable at 0.0 and 1.0
-
         batch_size = target_sizes.shape[0]
         boxes = boxes.view(batch_size, -1).clone()
-        scores = scores.view(batch_size).clone()
+        # scores = scores.view(batch_size).clone()
 
-        results = {'pred_conf': scores, 'pred_boxes': boxes}
+        # results = {'pred_conf': scores, 'pred_boxes': boxes}
+        results = {'pred_boxes': boxes}
 
         return results
 
@@ -138,37 +159,29 @@ class QueryProj(nn.Module):
     Song : project the template features into object query features
     [batch, C=512, H, W] -> [batch, N=1, output_dim=256]
 
-    we can use the ResNet50+PrROIPooling instead
-
-    Probelm, how to stack images with different shapes ? since the bbox are different ?
-        - the naive way, to resize + pooling
-
-    Song : If we resize the cropped template images, we make fix the number of the dimmensions, and remove the AdaptiveAvgPool2d ???
+    Song borrows the ideas from the paper : Video Actiion Transformer Network, this procedure as HighRes query preprocessing
+    1) to reduce the dimensinality by a 1x1 convolution
+    2) to concatenate the cells of the resulting feature map into a vector
+    3) to reduce the dimensionality of this feature mpa using a linear layer to 256D
     """
-    def __init__(self, input_dim, output_dim):
+    def __init__(self, input_dim, output_dim, feature_size):
         super().__init__()
 
-        pool_size = 4*4
-        self.conv = nn.Conv2d(input_dim, output_dim, kernel_size=1) # C=512 -> 256
-        # self.pool = nn.AdaptiveAvgPool2d((pool_size, pool_size))
-        self.fc = nn.Linear(pool_size*output_dim, output_dim)
+        self.conv = nn.Conv2d(input_dim, output_dim, kernel_size=1)             # C=512 -> 256
+        self.fc = nn.Linear(feature_size*feature_size*output_dim, output_dim)
 
     def forward(self, x):
-        x = self.conv(x)              # [batch, 512, 4, 4] - > [batch, 256, H, W]
-        # print('Song in detr.py: x.shape = ', x.shape)
-        # x = self.pool(x)              # [batch, 256, H, W] - > [batch, 256, 5, 5]
-        x = x.flatten(1)              # [batch, 256, 5, 5] - > [batch, 256*5*5]
-        x = F.relu(self.fc(x))        # [batch, 256*5*5] -> [batch, 256]
-        # return torch.unsqueeze(x, 1)  # [batch, 1, 256]
-        return x.unsqueeze(1)
+        x = self.conv(x)                                                        # [batch, 512, H, W] - > [batch, 256, H, W]
+        x = x.flatten(1)                                                        # [batch, 256, 5, 5] - > [batch, 256*5*5]
+        x = F.relu(self.fc(x))                                                  # [batch, 256*5*5] -> [batch, 256]
+        return x.unsqueeze(1)                                                   # [batch, 1, 256]
+        # return torch.unsqueeze(x, 1)
 
 def build_tracker(backbone_name='resnet50',
+                  output_layers=['layer4'],
                   backbone_pretrained=True,
                   hidden_dim=256,
                   position_embedding='learned',
-                  # lr_backbone=1e-5,
-                  # masks=False,
-                  # dilation=False,
                   dropout=0.1,
                   nheads=8,
                   dim_feedforward=2048,
@@ -192,15 +205,9 @@ def build_tracker(backbone_name='resnet50',
         # -dilation           : If true, we replace stride with dilation in the last convolutional block (DC5)
         -position_embedding : Type of positional embedding to use on top of the image features, chices=('sine', 'learned')
     '''
-
-    # backbone = build_backbone(backbone=backbone,
-    #                           backbone_pretrained=True,
-    #                           hidden_dim=hidden_dim,
-    #                           position_embedding=position_embedding,
-    #                           lr_backbone=lr_backbone,
-    #                           masks=masks,
-    #                           dilation=dilation)
+    # Positional Embedding + Resnet50
     backbone = build_backbone(backbone_name=backbone_name,
+                              output_layers=output_layers,
                               backbone_pretrained=backbone_pretrained,
                               hidden_dim=hidden_dim,
                               position_embedding=position_embedding)
@@ -212,9 +219,10 @@ def build_tracker(backbone_name='resnet50',
                                     enc_layers=enc_layers,
                                     dec_layers=dec_layers,
                                     pre_norm=pre_norm)
+
     # Convert the [cx, cy, h, w] into [x, y, h, w]
     postprocessors = PostProcess()
 
-    model = DETR(backbone, transformer, postprocessors)
+    model = DETR_ROI(backbone, transformer, postprocessors)
 
     return model

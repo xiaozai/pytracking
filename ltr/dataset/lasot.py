@@ -127,7 +127,7 @@ class Lasot(BaseVideoDataset):
         bbox = self._read_bb_anno(seq_path)
 
         # valid = (bbox[:, 2] > 0) & (bbox[:, 3] > 0)
-        valid = (bbox[:, 2] > 1.0) & (bbox[:, 3] > 1.0)
+        valid = (bbox[:, 2] > 5.0) & (bbox[:, 3] > 5.0)
         visible = self._read_target_visible(seq_path) & valid.byte()
 
         return {'bbox': bbox, 'valid': valid, 'visible': visible}
