@@ -269,5 +269,6 @@ def resnet50(output_layers=None, pretrained=False, **kwargs):
                 raise ValueError('Unknown layer: {}'.format(l))
     model = ResNet(Bottleneck, [3, 4, 6, 3], output_layers, **kwargs)
     if pretrained:
+        print('loading pretrained ResNet50 ....')
         model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
     return model

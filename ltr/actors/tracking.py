@@ -128,12 +128,12 @@ class TransformerROIActor(BaseActor):
 
         # Total loss
         # loss = self.loss_weight['bbox'] * loss_dict['loss_bbox'] + self.loss_weight['iou'] * loss_dict['loss_giou'] # + self.loss_weight['conf'] * loss_dict['loss_conf']
-        loss = self.loss_weight['iou'] * loss_dict['loss_giou'] # + self.loss_weight['conf'] * loss_dict['loss_conf']
+        loss = self.loss_weight['bbox'] * loss_dict['loss_bbox'] + self.loss_weight['iou'] * loss_dict['loss_giou'] # + self.loss_weight['conf'] * loss_dict['loss_conf']
 
 
         # Log stats
         stats = {'Loss/total': loss.item(),
-                 # 'Loss/bbox' : loss_dict['loss_bbox'].item(),
+                 'Loss/bbox' : loss_dict['loss_bbox'].item(),
                  'Loss/iou'  : loss_dict['loss_giou'].item(),
                  # 'Loss/conf' : loss_dict['loss_conf'].item()
                  }

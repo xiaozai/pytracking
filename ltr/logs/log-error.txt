@@ -1,2 +1,0 @@
-slurmstepd: error: *** JOB 16896305 ON nag07 CANCELLED AT 2020-12-30T19:27:36 ***
-Job has already finished for job 16896305

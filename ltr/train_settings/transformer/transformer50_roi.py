@@ -90,14 +90,15 @@ def run(settings):
 
     # Create network and actor
     net = detr_roi.build_tracker(backbone_name='resnet50',
-                                 output_layers=['layer4'],
+                                 output_layers=['layer3'],
+                                 num_channels=1024, # 2048 for layer4
                                  backbone_pretrained=True,
-                                 hidden_dim=256,
+                                 hidden_dim=128,
                                  position_embedding='learned', # position_embedding='sine',
                                  dropout=0.1,
                                  nheads=8,
                                  dim_feedforward=2048,
-                                 enc_layers=3, # Song try suitable layers
+                                 enc_layers=6,
                                  dec_layers=3,
                                  pre_norm=False)
 
@@ -107,7 +108,7 @@ def run(settings):
 
     objective = SetCriterion(losses=['boxes_iou'])
 
-    loss_weight = {'bbox': 1, 'iou': 1} # , 'conf': 100}
+    loss_weight = {'bbox': 1, 'iou': 100} # , 'conf': 100}
 
     actor = actors.TransformerROIActor(net=net, objective=objective, loss_weight=loss_weight)
 
@@ -120,7 +121,7 @@ def run(settings):
         },
     ]
 
-    optimizer = torch.optim.AdamW(param_dicts, lr=1e-2, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(param_dicts, lr=1e-4, weight_decay=1e-4)
 
     lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 200)
 

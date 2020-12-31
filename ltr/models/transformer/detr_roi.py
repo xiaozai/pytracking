@@ -28,20 +28,20 @@ class DETR_ROI(nn.Module):
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
             transformer: torch module of the transformer architecture. See transformer.py
+            postprocessors : post-processing
         """
         super().__init__()
 
         self.transformer = transformer
         hidden_dim = transformer.d_model                                        # 256
-        # self.conf_embed = MLP(hidden_dim, hidden_dim, 1, 3)                     # Song added
+        # self.conf_embed = MLP(hidden_dim, hidden_dim, 1, 3)                   # Song added
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         roi_windowsize = 3
-        self.prroi_pool = PrRoIPool2D(roi_windowsize, roi_windowsize, 1/32) # 5, 5, ?
+        self.prroi_pool = PrRoIPool2D(roi_windowsize, roi_windowsize, 1/32)     #
         self.query_proj = QueryProj(backbone.num_channels, hidden_dim, roi_windowsize) # Song added, project Template features into query
         self.backbone = backbone
         self.postprocessors = postprocessors
-
 
 
     def forward(self, search_imgs, template_imgs, template_bb):
@@ -63,7 +63,9 @@ class DETR_ROI(nn.Module):
         """
         if len(search_imgs.shape) == 5:
             '''
-            Song : in the processing , if the mode is the "sequence", it will return [num_test_imgs, batch_size, 3, H, W]
+            Song : in the processing ,
+                    if the mode is the "sequence", it will return [num_test_imgs, batch_size, 3, H, W]
+                    if the mode is the "pair", it will return [batch_size, 3, H, W]
             '''
             num_train_imgs, batch_size, C, H, W = search_imgs.shape
             search_imgs = search_imgs.view(num_train_imgs*batch_size, C, H, W).clone().requires_grad_()
@@ -71,7 +73,7 @@ class DETR_ROI(nn.Module):
             num_test_imgs, batch_size, C, H, W = template_imgs.shape
             template_imgs = template_imgs.view(num_test_imgs*batch_size, C, H, W).clone().requires_grad_()
 
-        target_sizes = torch.unsqueeze(torch.tensor(search_imgs.shape[-2:]), 0) # [1 x 2]
+        target_sizes = torch.unsqueeze(torch.tensor(search_imgs.shape[-2:]), 0) # [1 x 2], [288x288]
         target_sizes = target_sizes.repeat(search_imgs.shape[0], 1)             # [batch_size x 2]
         target_sizes = target_sizes.cuda()
 
@@ -79,7 +81,7 @@ class DETR_ROI(nn.Module):
         search_mask = None # Song : we don't use the mask yet
 
         # PrROIPooling on template branch
-        template_features, template_pos = self.backbone(template_imgs)           # [batch, 2048, 9, 9]
+        template_features, template_pos = self.backbone(template_imgs)          # [batch, 2048, 9, 9] for layer4, [batch, 1024, 18, 18] for layer3
 
         # Add batch_index to rois, bb is [batch, 4]
         batch_size = template_bb.shape[0]
@@ -90,7 +92,6 @@ class DETR_ROI(nn.Module):
         roi_bb = torch.cat((batch_index, bb), dim=1)
         template_roi = self.prroi_pool(template_features, roi_bb)               # [batch, 2048, roi_windowsize, roi_windowsize]
 
-
         # Transformer
         hs = self.transformer(self.input_proj(search_features), search_mask, self.query_proj(template_roi), search_pos)[0]
 
@@ -98,7 +99,7 @@ class DETR_ROI(nn.Module):
         outputs_coord = self.bbox_embed(hs).sigmoid()                           # Song why do not output the [x,y,w,h] directly ? they are same
 
         # out = {'pred_conf': outputs_conf[-1], 'pred_boxes': outputs_coord[-1]}
-        out = {'pred_boxes': outputs_coord[-1]}
+        out = {'pred_boxes': outputs_coord[-1]}                                 # can be [x, y, w, h]
 
         out = self.postprocessors(out, target_sizes) # [x,y,w,h]
 
@@ -118,12 +119,12 @@ class PostProcess(nn.Module):
                           For visualization, this should be the image size after data augment, but before padding
         """
         # scores, boxes = outputs['pred_conf'], outputs['pred_boxes']
-        boxes = outputs['pred_boxes']
+        boxes = outputs['pred_boxes'] # [cx, cy, w, h]
 
         # assert len(scores) == len(target_sizes)
         # assert target_sizes.shape[1] == 2
 
-        # boxes = box_ops.box_cxcywh_to_xywh(out_bbox) # Song : assume that, the network predict (x, y, w, h)
+        boxes = box_ops.box_cxcywh_to_xywh(boxes)
 
         # and from relative [0, 1] to absolute [0, height] coordinates
         img_h, img_w = target_sizes.unbind(1)                                   # img_h : [batch_size, ], img_w : [batch_size, ]
@@ -179,6 +180,7 @@ class QueryProj(nn.Module):
 
 def build_tracker(backbone_name='resnet50',
                   output_layers=['layer4'],
+                  num_channels=2048, # for layer4, and 1024 for layer3
                   backbone_pretrained=True,
                   hidden_dim=256,
                   position_embedding='learned',
@@ -200,14 +202,15 @@ def build_tracker(backbone_name='resnet50',
 
 
     the settings for the convolutional backbone :
-        -backbone           : Name of the convolutional backbone to use
+        -backbone             : Name of the convolutional backbone to use
         # -masks              : Train segmentation head if the flag is provided
         # -dilation           : If true, we replace stride with dilation in the last convolutional block (DC5)
-        -position_embedding : Type of positional embedding to use on top of the image features, chices=('sine', 'learned')
+        -position_embedding   : Type of positional embedding to use on top of the image features, chices=('sine', 'learned')
     '''
     # Positional Embedding + Resnet50
     backbone = build_backbone(backbone_name=backbone_name,
                               output_layers=output_layers,
+                              num_channels=num_channels,
                               backbone_pretrained=backbone_pretrained,
                               hidden_dim=hidden_dim,
                               position_embedding=position_embedding)

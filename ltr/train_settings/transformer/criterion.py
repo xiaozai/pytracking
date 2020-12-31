@@ -42,7 +42,7 @@ class SetCriterion(nn.Module):
         prediction = outputs['pred_boxes'] # (x, y, w, h)
 
         targets = targets.view(prediction.shape[0], -1).clone().requires_grad_() # Song : fix this in the data loade
-        print('song criterion: target and pred : ', targets.shape, prediction.shape)
+
         loss_bbox = F.l1_loss(box_ops.box_xywh_to_cxcywh(prediction),
                               box_ops.box_xywh_to_cxcywh(targets),
                               reduction='none')
@@ -86,11 +86,11 @@ class SetCriterion(nn.Module):
         # targets = targets.view(prediction.shape[0], -1).clone().requires_grad_() # Song : fix this in the data loade
         targets = targets.requires_grad_()
 
-        # loss_bbox = F.l1_loss(box_ops.box_xywh_to_cxcywh(prediction),
-        #                       box_ops.box_xywh_to_cxcywh(targets),
-        #                       reduction='none')
-        #
-        # losses['loss_bbox'] = loss_bbox.sum()
+        loss_bbox = F.l1_loss(box_ops.box_xywh_to_cxcywh(prediction),
+                              box_ops.box_xywh_to_cxcywh(targets),
+                              reduction='none')
+
+        losses['loss_bbox'] = loss_bbox.sum()
 
         target_confidences = torch.diag(box_ops.generalized_box_iou(
                                         box_ops.box_xywh_to_xyxy(prediction),

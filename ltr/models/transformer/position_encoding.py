@@ -27,7 +27,7 @@ class PositionEmbeddingSine(nn.Module):
 
     def forward(self, tensor_list: NestedTensor):
         x = tensor_list.tensors
-        mask = tensor_list.mask
+        mask = tensor_list.mask # Song How to generate the Mask for RGB ? for RGB+D ??
         assert mask is not None
         not_mask = ~mask
         y_embed = not_mask.cumsum(1, dtype=torch.float32)
