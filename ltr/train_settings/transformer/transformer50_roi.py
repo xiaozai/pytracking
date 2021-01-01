@@ -21,14 +21,14 @@ def run(settings):
     settings.normalize_mean = [0.485, 0.456, 0.406]
     settings.normalize_std = [0.229, 0.224, 0.225]
     settings.search_area_factor = 5.0
-    # settings.output_sigma_factor = 1/4            # Song ??
-    # settings.target_filter_sz = 4                 # Song ???
-    # settings.feature_sz = 18
+    settings.output_sigma_factor = 1/4            # Song ??
+    settings.target_filter_sz = 4                 # Song ???
+    settings.feature_sz = 18
     # settings.output_sz = settings.feature_sz * 16 # Song 18*16 = 288 , so the test images crops are 288*288
     settings.output_sz = 288
     settings.center_jitter_factor = {'train': 3, 'test': 4.5}
     settings.scale_jitter_factor = {'train': 0.25, 'test': 0.5}
-    # settings.hinge_threshold = 0.05
+    settings.hinge_threshold = 0.05
     # settings.print_stats = ['Loss/total', 'Loss/iou', 'ClfTrain/clf_ce', 'ClfTrain/test_loss']
 
     # Train datasets

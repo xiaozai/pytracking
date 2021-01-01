@@ -82,7 +82,6 @@ class DETR_ROI(nn.Module):
 
         # PrROIPooling on template branch
         template_features, template_pos = self.backbone(template_imgs)          # [batch, 2048, 9, 9] for layer4, [batch, 1024, 18, 18] for layer3
-
         # Add batch_index to rois, bb is [batch, 4]
         batch_size = template_bb.shape[0]
         batch_index = torch.arange(batch_size, dtype=torch.float32).reshape(-1, 1).to(template_bb.device)
@@ -91,7 +90,6 @@ class DETR_ROI(nn.Module):
         bb[:, 2:4] = bb[:, 0:2] + bb[:, 2:4]
         roi_bb = torch.cat((batch_index, bb), dim=1)
         template_roi = self.prroi_pool(template_features, roi_bb)               # [batch, 2048, roi_windowsize, roi_windowsize]
-
         # Transformer
         hs = self.transformer(self.input_proj(search_features), search_mask, self.query_proj(template_roi), search_pos)[0]
 
