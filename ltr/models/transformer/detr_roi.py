@@ -8,7 +8,7 @@ from torch import nn
 
 import ltr.data.box_ops as box_ops
 
-from .resnet_backbone import build_backbone
+from .resnet_backbone import build_backbone, build_template_backbone
 from .transformer import build_transformer
 from ltr.external.PreciseRoIPooling.pytorch.prroi_pool import PrRoIPool2D
 
@@ -23,7 +23,7 @@ class DETR_ROI(nn.Module):
             2) To remove the num_classes, num_queries, because they are 1
             3) To replace the class_embed to conf_embed ??? to predict the confidence?
     """
-    def __init__(self, backbone, transformer, postprocessors):
+    def __init__(self, backbone, transformer, template_backbone): #postprocessors):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -38,11 +38,12 @@ class DETR_ROI(nn.Module):
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
         self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
         roi_windowsize = 3
-        self.prroi_pool = PrRoIPool2D(roi_windowsize, roi_windowsize, 1/32)     #
+        self.prroi_pool = PrRoIPool2D(roi_windowsize, roi_windowsize, 1/32)     # if Resnet return batchx2048x9x9, it is 32, else if Resnet return batchx1024x18x18, it is 16
         self.query_proj = QueryProj(backbone.num_channels, hidden_dim, roi_windowsize) # Song added, project Template features into query
         self.backbone = backbone
-        self.postprocessors = postprocessors
+        # self.postprocessors = postprocessors
 
+        self.template_backbone = template_backbone
 
     def forward(self, search_imgs, template_imgs, template_bb):
         """ The forward expects a NestedTensor, which consists of:
@@ -81,7 +82,9 @@ class DETR_ROI(nn.Module):
         search_mask = None # Song : we don't use the mask yet
 
         # PrROIPooling on template branch
-        template_features, template_pos = self.backbone(template_imgs)          # [batch, 2048, 9, 9] for layer4, [batch, 1024, 18, 18] for layer3
+        # template_features, template_pos = self.backbone(template_imgs)          # [batch, 2048, 9, 9] for layer4, [batch, 1024, 18, 18] for layer3
+        template_features = self.template_backbone(template_imgs)
+        # print('Song : template_features: ', template_features)
         # Add batch_index to rois, bb is [batch, 4]
         batch_size = template_bb.shape[0]
         batch_index = torch.arange(batch_size, dtype=torch.float32).reshape(-1, 1).to(template_bb.device)
@@ -97,9 +100,20 @@ class DETR_ROI(nn.Module):
         outputs_coord = self.bbox_embed(hs).sigmoid()                           # Song why do not output the [x,y,w,h] directly ? they are same
 
         # out = {'pred_conf': outputs_conf[-1], 'pred_boxes': outputs_coord[-1]}
-        out = {'pred_boxes': outputs_coord[-1]}                                 # can be [x, y, w, h]
+        # out = {'pred_boxes': outputs_coord[-1]}                                 # can be [x, y, w, h]
 
-        out = self.postprocessors(out, target_sizes) # [x,y,w,h]
+        # out = self.postprocessors(out, target_sizes) # [x,y,w,h]
+
+        # Song add the post-processing here
+        boxes = box_ops.box_cxcywh_to_xywh(outputs_coord[-1])                 # ask the network to output xywh
+        img_h, img_w = target_sizes.unbind(1)                                   # img_h : [batch_size, ], img_w : [batch_size, ]
+        scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
+        boxes = boxes * scale_fct[:, None, :]                                   # back to original size in 288x288
+
+        batch_size = target_sizes.shape[0]
+        boxes = boxes.view(batch_size, -1).clone().requires_grad_()
+
+        out = {'pred_boxes': boxes}
 
         return out
 
@@ -130,7 +144,7 @@ class PostProcess(nn.Module):
         boxes = boxes * scale_fct[:, None, :]
 
         batch_size = target_sizes.shape[0]
-        boxes = boxes.view(batch_size, -1).clone()
+        boxes = boxes.view(batch_size, -1).clone().requires_grad_()
         # scores = scores.view(batch_size).clone()
 
         # results = {'pred_conf': scores, 'pred_boxes': boxes}
@@ -172,7 +186,7 @@ class QueryProj(nn.Module):
     def forward(self, x):
         x = self.conv(x)                                                        # [batch, 512, H, W] - > [batch, 256, H, W]
         x = x.flatten(1)                                                        # [batch, 256, 5, 5] - > [batch, 256*5*5]
-        x = F.relu(self.fc(x))                                                  # [batch, 256*5*5] -> [batch, 256]
+        x = F.relu(self.fc(x))                                                  # [batch, 256*5*5]   -> [batch, 256]
         return x.unsqueeze(1)                                                   # [batch, 1, 256]
         # return torch.unsqueeze(x, 1)
 
@@ -222,8 +236,11 @@ def build_tracker(backbone_name='resnet50',
                                     pre_norm=pre_norm)
 
     # Convert the [cx, cy, h, w] into [x, y, h, w]
-    postprocessors = PostProcess()
+    # postprocessors = PostProcess()
+    template_backbone = build_template_backbone(backbone_name=backbone_name,
+                                                output_layers=output_layers,
+                                                backbone_pretrained=backbone_pretrained)
 
-    model = DETR_ROI(backbone, transformer, postprocessors)
+    model = DETR_ROI(backbone, transformer, template_backbone) # postprocessors)
 
     return model

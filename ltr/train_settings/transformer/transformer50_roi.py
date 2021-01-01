@@ -90,16 +90,16 @@ def run(settings):
 
     # Create network and actor
     net = detr_roi.build_tracker(backbone_name='resnet50',
-                                 output_layers=['layer3'],
-                                 num_channels=1024, # 2048 for layer4
+                                 output_layers=['layer4'],
+                                 num_channels=2048, # 2048 for layer4, 1024 for layer3
                                  backbone_pretrained=True,
-                                 hidden_dim=128,
+                                 hidden_dim=256,
                                  position_embedding='learned', # position_embedding='sine',
                                  dropout=0.1,
                                  nheads=8,
                                  dim_feedforward=2048,
                                  enc_layers=6,
-                                 dec_layers=3,
+                                 dec_layers=6,
                                  pre_norm=False)
 
     # Wrap the network for multi GPU training
