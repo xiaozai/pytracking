@@ -147,10 +147,9 @@ class BaseTrainer:
             # Load most recent checkpoint
             # checkpoint_list = sorted(glob.glob('{}/{}/{}_ep*.pth.tar'.format(self._checkpoint_dir,
             #                                                                  self.settings.project_path, net_type)))
-            checkpoint_list = sorted(glob.glob('{}/{}/{}_ep*.pth'.format(self._checkpoint_dir,
+            checkpoint_list = sorted(glob.glob('{}/{}/{}_ep*.pth.tar'.format(self._checkpoint_dir,
                                                                              self.settings.project_path, net_type)))
-            print('{}/{}/{}_ep*.pth'.format(self._checkpoint_dir, self.settings.project_path, net_type))
-
+            print('{}/{}/{}_ep*.pth.tar'.format(self._checkpoint_dir, self.settings.project_path, net_type))
             if checkpoint_list:
                 checkpoint_path = checkpoint_list[-1]
             else:

@@ -8,11 +8,11 @@ from torch import nn
 
 import ltr.data.box_ops as box_ops
 
-from .resnet_backbone import build_backbone, build_template_backbone
-from .transformer import build_transformer
+from .resnet_backbone import build_backbone_pos, build_resnet_backbone
+from .transformer import build_transformer_query
 from ltr.external.PreciseRoIPooling.pytorch.prroi_pool import PrRoIPool2D
 
-class DETR_ROI(nn.Module):
+class DETR_ROI_QUERY(nn.Module):
     """
         Song : This is the DETR module that performs object tracking
 
@@ -23,7 +23,7 @@ class DETR_ROI(nn.Module):
             2) To remove the num_classes, num_queries, because they are 1
             3) To replace the class_embed to conf_embed ??? to predict the confidence?
     """
-    def __init__(self, backbone, transformer, template_backbone): #postprocessors):
+    def __init__(self, search_backbone_pos, transformer, template_backbone, query_encoder_size=9, roi_windowsize=3, prroipool_scalefactor=1/32):
         """ Initializes the model.
         Parameters:
             backbone: torch module of the backbone to be used. See backbone.py
@@ -33,16 +33,19 @@ class DETR_ROI(nn.Module):
         super().__init__()
 
         self.transformer = transformer
-        hidden_dim = transformer.d_model                                        # 256
-        # self.conf_embed = MLP(hidden_dim, hidden_dim, 1, 3)                   # Song added
+        hidden_dim = transformer.d_model
+        # self.conf_embed = MLP(hidden_dim, hidden_dim, 1, 3)
         self.bbox_embed = MLP(hidden_dim, hidden_dim, 4, 3)
-        self.input_proj = nn.Conv2d(backbone.num_channels, hidden_dim, kernel_size=1)
-        roi_windowsize = 3
-        self.prroi_pool = PrRoIPool2D(roi_windowsize, roi_windowsize, 1/32)     # if Resnet return batchx2048x9x9, it is 32, else if Resnet return batchx1024x18x18, it is 16
-        self.query_proj = QueryProj(backbone.num_channels, hidden_dim, roi_windowsize) # Song added, project Template features into query
-        self.backbone = backbone
-        # self.postprocessors = postprocessors
+        # Project the channels to hidden_dim
+        self.input_proj = nn.Conv2d(search_backbone_pos.num_channels, hidden_dim, kernel_size=1)
+        # PrROIPooling layer for template + bbox
+        self.prroi_pool = PrRoIPool2D(roi_windowsize, roi_windowsize, prroipool_scalefactor)
+        # Project the template roi feature map into Query Embedding for Decoder
+        self.query_proj_decoder = QueryProj_Decoder(search_backbone_pos.num_channels, hidden_dim, roi_windowsize)
+        # Project the template roi feature map into Query Embedding for Encoder
+        self.query_proj_encoder = QueryProj_Encoder(search_backbone_pos.num_channels, hidden_dim, query_encoder_size) # Song  assume that the ResNet50 - layer4
 
+        self.search_backbone_pos = search_backbone_pos
         self.template_backbone = template_backbone
 
     def forward(self, search_imgs, template_imgs, template_bb):
@@ -78,14 +81,12 @@ class DETR_ROI(nn.Module):
         target_sizes = target_sizes.repeat(search_imgs.shape[0], 1)             # [batch_size x 2]
         target_sizes = target_sizes.cuda()
 
-        search_features, search_pos = self.backbone(search_imgs)
+        search_features, search_pos = self.search_backbone_pos(search_imgs)
         search_mask = None # Song : we don't use the mask yet
 
-        # PrROIPooling on template branch
-        # template_features, template_pos = self.backbone(template_imgs)          # [batch, 2048, 9, 9] for layer4, [batch, 1024, 18, 18] for layer3
-        template_features = self.template_backbone(template_imgs)
-        # print('Song : template_features: ', template_features)
-        # Add batch_index to rois, bb is [batch, 4]
+        # Template features from T-1 frame
+        template_features = self.template_backbone(template_imgs)               # [batch, 2048, 9, 9] for layer4, [batch, 1024, 18, 18] for layer3
+        # PrROIPooling on template branch Add batch_index to rois, bb is [batch, 4]
         batch_size = template_bb.shape[0]
         batch_index = torch.arange(batch_size, dtype=torch.float32).reshape(-1, 1).to(template_bb.device)
         # input bb is in format xywh, convert it to x0y0x1y1 format
@@ -93,19 +94,23 @@ class DETR_ROI(nn.Module):
         bb[:, 2:4] = bb[:, 0:2] + bb[:, 2:4]
         roi_bb = torch.cat((batch_index, bb), dim=1)
         template_roi = self.prroi_pool(template_features, roi_bb)               # [batch, 2048, roi_windowsize, roi_windowsize]
+
         # Transformer
-        hs = self.transformer(self.input_proj(search_features), search_mask, self.query_proj(template_roi), search_pos)[0]
+        hs = self.transformer(self.input_proj(search_features),
+                              search_mask,
+                              self.query_proj_encoder(template_roi),
+                              self.query_proj_decoder(template_roi),
+                              search_pos)[0]
 
         # outputs_conf = self.conf_embed(hs)                                    # Song added
         outputs_coord = self.bbox_embed(hs).sigmoid()                           # Song why do not output the [x,y,w,h] directly ? they are same
 
         # out = {'pred_conf': outputs_conf[-1], 'pred_boxes': outputs_coord[-1]}
         # out = {'pred_boxes': outputs_coord[-1]}                                 # can be [x, y, w, h]
-
         # out = self.postprocessors(out, target_sizes) # [x,y,w,h]
 
-        # Song add the post-processing here
-        boxes = box_ops.box_cxcywh_to_xywh(outputs_coord[-1])                 # ask the network to output xywh
+        # Post-processing, to scale the output bbox
+        boxes = box_ops.box_cxcywh_to_xywh(outputs_coord[-1])                   # force the network to output xywh
         img_h, img_w = target_sizes.unbind(1)                                   # img_h : [batch_size, ], img_w : [batch_size, ]
         scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
         boxes = boxes * scale_fct[:, None, :]                                   # back to original size in 288x288
@@ -116,42 +121,6 @@ class DETR_ROI(nn.Module):
         out = {'pred_boxes': boxes}
 
         return out
-
-class PostProcess(nn.Module):
-    """ This module converts the model's output into the format expected by the coco api
-        Song : ? for tracking , we need to output the box of xywh and confidence
-    """
-    @torch.no_grad()
-    def forward(self, outputs, target_sizes):
-        """ Perform the computation
-        Parameters:
-            outputs: raw outputs of the model
-            target_sizes: tensor of dimension [batch_size x 2] containing the size of each images of the batch
-                          For evaluation, this must be the original image size (before any data augmentation)
-                          For visualization, this should be the image size after data augment, but before padding
-        """
-        # scores, boxes = outputs['pred_conf'], outputs['pred_boxes']
-        boxes = outputs['pred_boxes'] # [cx, cy, w, h]
-
-        # assert len(scores) == len(target_sizes)
-        # assert target_sizes.shape[1] == 2
-
-        boxes = box_ops.box_cxcywh_to_xywh(boxes)
-
-        # and from relative [0, 1] to absolute [0, height] coordinates
-        img_h, img_w = target_sizes.unbind(1)                                   # img_h : [batch_size, ], img_w : [batch_size, ]
-        scale_fct = torch.stack([img_w, img_h, img_w, img_h], dim=1)
-        boxes = boxes * scale_fct[:, None, :]
-
-        batch_size = target_sizes.shape[0]
-        boxes = boxes.view(batch_size, -1).clone().requires_grad_()
-        # scores = scores.view(batch_size).clone()
-
-        # results = {'pred_conf': scores, 'pred_boxes': boxes}
-        results = {'pred_boxes': boxes}
-
-        return results
-
 
 class MLP(nn.Module):
     """ Very simple multi-layer perceptron (also called FFN)"""
@@ -167,7 +136,7 @@ class MLP(nn.Module):
             x = F.relu(layer(x)) if i < self.num_layers - 1 else layer(x)
         return x
 
-class QueryProj(nn.Module):
+class QueryProj_Decoder(nn.Module):
     """
     Song : project the template features into object query features
     [batch, C=512, H, W] -> [batch, N=1, output_dim=256]
@@ -190,6 +159,22 @@ class QueryProj(nn.Module):
         return x.unsqueeze(1)                                                   # [batch, 1, 256]
         # return torch.unsqueeze(x, 1)
 
+class QueryProj_Encoder(nn.Module):
+    """
+    Song : project the template features into object query features
+    Template ROI [batch, 2048, 3, 3] ->  the same shape as the src [batch, 256, 9, 9]
+    """
+    def __init__(self, input_dim, output_dim, output_size):
+        super().__init__()
+
+        self.output_size = output_size
+        self.conv = nn.Conv2d(input_dim, output_dim, kernel_size=1)
+    def forward(self, x):
+
+        x = self.conv(x)                                                        # [batch x 2048 x 3 x 3] --> [batch x 256 x 3 x 3]
+        x = nn.functional.interpolate(x, size=self.output_size)
+        return x
+
 def build_tracker(backbone_name='resnet50',
                   output_layers=['layer4'],
                   num_channels=2048, # for layer4, and 1024 for layer3
@@ -201,7 +186,8 @@ def build_tracker(backbone_name='resnet50',
                   dim_feedforward=2048,
                   enc_layers=6,
                   dec_layers=6,
-                  pre_norm=False):
+                  pre_norm=False,
+                  roi_windowsize=3):
     '''
     the settings for the transformer :
         -hiddent_dim     : Size of the embeddings (dimension of the transformer)
@@ -218,27 +204,45 @@ def build_tracker(backbone_name='resnet50',
         # -masks              : Train segmentation head if the flag is provided
         # -dilation           : If true, we replace stride with dilation in the last convolutional block (DC5)
         -position_embedding   : Type of positional embedding to use on top of the image features, chices=('sine', 'learned')
+
+        -roi_windowsize       : the window size for PrROIPooling layer on the template branchs
     '''
     # Positional Embedding + Resnet50
-    backbone = build_backbone(backbone_name=backbone_name,
-                              output_layers=output_layers,
-                              num_channels=num_channels,
-                              backbone_pretrained=backbone_pretrained,
-                              hidden_dim=hidden_dim,
-                              position_embedding=position_embedding)
+    search_backbone_pos = build_backbone_pos(backbone_name=backbone_name,
+                                             output_layers=output_layers,
+                                             num_channels=num_channels,
+                                             backbone_pretrained=backbone_pretrained,
+                                             hidden_dim=hidden_dim,
+                                             position_embedding=position_embedding)
 
-    transformer = build_transformer(hidden_dim=hidden_dim,
-                                    dropout=dropout,
-                                    nheads=nheads,
-                                    dim_feedforward=dim_feedforward,
-                                    enc_layers=enc_layers,
-                                    dec_layers=dec_layers,
-                                    pre_norm=pre_norm)
+    # Single ResNet backbone, for template branch
+    template_backbone = build_resnet_backbone(backbone_name=backbone_name,
+                                              output_layers=output_layers,
+                                              backbone_pretrained=backbone_pretrained)
 
-    template_backbone = build_template_backbone(backbone_name=backbone_name,
-                                                output_layers=output_layers,
-                                                backbone_pretrained=backbone_pretrained)
+    transformer = build_transformer_query(hidden_dim=hidden_dim,
+                                          dropout=dropout,
+                                          nheads=nheads,
+                                          dim_feedforward=dim_feedforward,
+                                          enc_layers=enc_layers,
+                                          dec_layers=dec_layers,
+                                          pre_norm=pre_norm)
 
-    model = DETR_ROI(backbone, transformer, template_backbone) # postprocessors)
+
+    '''
+        ResNet50 - layer4 : batchx2048x9x9 ,  scale_factor = 1/32 , 288x288 -> 9x9
+        ResNet50 - layer3 : batchx1024x18x18, scale_factor = 1/16,  288x288 -> 18x18
+    '''
+    if 'layer4' in output_layers:
+        scale_factor = 1/32
+        query_encoder_size = 9
+    elif 'layer3' in output_layers:
+        scale_factor = 1/16
+        query_encoder_size = 18
+
+    model = DETR_ROI_QUERY(search_backbone_pos, transformer, template_backbone,
+                           query_encoder_size=query_encoder_size,
+                           roi_windowsize=roi_windowsize,
+                           prroipool_scalefactor=scale_factor) # postprocessors)
 
     return model

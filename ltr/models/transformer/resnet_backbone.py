@@ -46,6 +46,21 @@ def build_backbone(backbone_name='resnet50', output_layers=['layer4'], num_chann
 
     return model
 
+def build_backbone_pos(backbone_name='resnet50', output_layers=['layer4'], num_channels=2048, backbone_pretrained=True, hidden_dim=256, position_embedding='learned'):
+
+    position_embedding = build_position_encoding(hidden_dim, position_embedding=position_embedding)
+
+    if backbone_name == 'resnet18':
+        # num_channels = 512
+        backbone = backbones.resnet18(output_layers=output_layers, pretrained=backbone_pretrained)
+    else:
+        # num_channels = 1024 # for layer3, 2048 for layer4
+        backbone = backbones.resnet50(output_layers=output_layers, pretrained=backbone_pretrained)
+
+    model = Joiner(backbone, position_embedding, num_channels=num_channels)
+
+    return model
+
 
 class template_backbone(nn.Module):
     def __init__(self, backbone):
@@ -61,6 +76,18 @@ class template_backbone(nn.Module):
         return out[-1]
 
 def build_template_backbone(backbone_name='resnet50', output_layers=['layer4'], backbone_pretrained=True):
+
+    if backbone_name == 'resnet18':
+        # num_channels = 512
+        backbone = backbones.resnet18(output_layers=output_layers, pretrained=backbone_pretrained)
+    else:
+        # num_channels = 1024 # for layer3, 2048 for layer4
+        backbone = backbones.resnet50(output_layers=output_layers, pretrained=backbone_pretrained)
+
+    model = template_backbone(backbone)
+    return model
+
+def build_resnet_backbone(backbone_name='resnet50', output_layers=['layer4'], backbone_pretrained=True):
 
     if backbone_name == 'resnet18':
         # num_channels = 512
