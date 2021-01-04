@@ -139,47 +139,7 @@ class TransformerROIActor(BaseActor):
                  'Loss/iou'  : loss_dict['loss_giou'].item(),
                  # 'Loss/conf' : loss_dict['loss_conf'].item()
                  }
-
-        # # cv2.namedWindow('examples')
-        # test_id = 0
-        # vis_test_imgs = data['test_images'].clone().cpu().numpy()
-        # vis_test_imgs = vis_test_imgs[test_id, ...]
-        # vis_test_imgs = np.swapaxes(vis_test_imgs, 0, 1)
-        # vis_test_imgs = np.swapaxes(vis_test_imgs, 1, 2)
-        # print('vis_test_imgs.shape = ', vis_test_imgs.shape)
-        #
-        # vis_train_imgs = data['train_images'].clone().cpu().numpy()
-        # vis_train_imgs = vis_train_imgs[test_id, ...]
-        # vis_train_imgs = np.swapaxes(vis_train_imgs, 0, 1)
-        # vis_train_imgs = np.swapaxes(vis_train_imgs, 1, 2)
-        # print('vis_train_imgs.shape = ', vis_train_imgs.shape)
-        #
-        # vis_test_anno = data['test_anno'].clone().cpu().numpy()
-        # vis_test_anno = vis_test_anno[test_id, ...]
-        # print('vis_test_anno.shape = ', vis_test_anno.shape)
-        #
-        # vis_train_anno = data['train_anno'].clone().cpu().numpy()
-        # vis_train_anno = vis_train_anno[test_id, ...]
-        # print('vis_train_anno.shape = ', vis_train_anno.shape)
-        #
-        # vis_pred = outputs['pred_boxes'].clone().cpu().numpy()
-        # vis_pred = vis_pred[test_id, ...]
-        # print('vis_pred.shape = ', vis_pred.shape)
-        #
-        # fig, (ax1, ax2) = plt.subplot(1, 2)
-        # rect_test = patches.Rectangle((vis_test_anno[0],vis_test_anno[1]),vis_test_anno[2],vis_test_anno[3], edgecolor='g', facecolor="none")
-        # ax1.imshow(vis_test_imgs)
-        # ax1.add_patch(rect_test)
-        #
-        # rect_train = patches.Rectangle((vis_train_anno[0],vis_train_anno[1]),vis_train_anno[2],vis_train_anno[3], edgecolor='g', facecolor="none")
-        # rect_pred = patches.Rectangle((vis_pred[0],vis_pred[1]),vis_pred[2],vis_pred[3], edgecolor='r', facecolor="none")
-        # ax2.imshow(vis_train_imgs)
-        # ax2.add_patch(rect_train)
-        # ax2.add_patch(rect_pred)
-        #
-        # plt.show()
-        # plt.close()
-
+                 
         return loss, stats
 
 
