@@ -94,7 +94,7 @@ def run(settings):
     # Create network and actor
     net = detr_roi.build_tracker(backbone_name='resnet50',
                                  output_layers=['layer4'],
-                                 num_channels=2048, # 2048 for layer4, 1024 for layer3
+                                 num_channels=2048,            # 2048 for layer4, 1024 for layer3
                                  backbone_pretrained=True,
                                  hidden_dim=256,
                                  position_embedding='learned', # position_embedding='sine',
@@ -124,10 +124,10 @@ def run(settings):
         },
     ]
 
-    optimizer = torch.optim.AdamW(param_dicts, lr=1e-4, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(param_dicts, lr=1e-5, weight_decay=1e-4) # 1e-4
 
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 200)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 100) # 200
 
     trainer = LTRTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
 
-    trainer.train(200, load_latest=True, fail_safe=True)
+    trainer.train(300, load_latest=True, fail_safe=True)

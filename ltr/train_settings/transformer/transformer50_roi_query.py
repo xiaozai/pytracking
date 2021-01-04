@@ -124,10 +124,10 @@ def run(settings):
         },
     ]
 
-    optimizer = torch.optim.AdamW(param_dicts, lr=1e-4, weight_decay=1e-4)
+    optimizer = torch.optim.AdamW(param_dicts, lr=1e-5, weight_decay=1e-4) # 1e-4
 
-    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 200)
+    lr_scheduler = optim.lr_scheduler.StepLR(optimizer, 100) # 200
 
     trainer = LTRTrainer(actor, [loader_train, loader_val], optimizer, settings, lr_scheduler)
 
-    trainer.train(200, load_latest=True, fail_safe=True)
+    trainer.train(400, load_latest=True, fail_safe=True)

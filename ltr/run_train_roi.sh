@@ -17,4 +17,4 @@ source activate pytracking
 
 python run_training.py transformer transformer50_roi
 
-conda deactivate pytracking
+conda deactivate
